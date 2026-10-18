@@ -24,6 +24,11 @@ export type Binrec = {
   init(): Promise<void>;
   /** Installs a shim for `command` and returns the shim's path. */
   install(command: string): Promise<string>;
+  /**
+   * Removes the shim for `command` and returns its path, or `null` if no binrec
+   * shim was installed for it. Recorded sessions are kept.
+   */
+  uninstall(command: string): Promise<string | null>;
   /** Turns recording off for every shim using this records folder. */
   disableRecords(): Promise<void>;
   /** Turns recording back on. */
@@ -47,6 +52,10 @@ const cliEntry =
 
 export const defaultPath = () =>
   join(process.env.BINREC_HOME ?? join(homedir(), ".binrec"), "bin");
+
+/** Every shim starts with these lines, so `uninstall` never removes a file binrec did not write. */
+const SHIM_HEADER = "#!/usr/bin/env bash\nexec ";
+const isShim = (content: string) => content.startsWith(SHIM_HEADER) && content.includes(" rec --records ");
 
 const shellQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 
@@ -75,13 +84,21 @@ const create = (options: CreateOptions = {}): Binrec => {
 
     const shimPath = join(path, basename(command));
     const shim = [
-      "#!/usr/bin/env bash",
-      `exec ${shellQuote(process.execPath)} ${shellQuote(cliEntry)} rec --records ${shellQuote(records)} ${shellQuote(target)} "$@"`,
+      `${SHIM_HEADER}${shellQuote(process.execPath)} ${shellQuote(cliEntry)} rec --records ${shellQuote(records)} ${shellQuote(target)} "$@"`,
       "",
     ].join("\n");
 
     await Bun.write(shimPath, shim);
     await chmod(shimPath, 0o755);
+    return shimPath;
+  };
+
+  const uninstall = async (command: string) => {
+    const shimPath = join(path, basename(command));
+    const shim = Bun.file(shimPath);
+    if (!(await shim.exists()) || !isShim(await shim.text())) return null;
+
+    await rm(shimPath);
     return shimPath;
   };
 
@@ -103,6 +120,7 @@ const create = (options: CreateOptions = {}): Binrec => {
     records,
     init,
     install,
+    uninstall,
     disableRecords,
     enableRecords,
     isRecording,

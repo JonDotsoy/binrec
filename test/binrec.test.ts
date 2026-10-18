@@ -61,3 +61,25 @@ test("binrec --version prints the package version", async () => {
     expect(result.stdout.toString()).toBe(`${version}\n`);
   }
 });
+
+test("binrec uninstall date removes the shim and date runs the real binary again", async () => {
+  const env = { ...process.env, BINREC_HOME: binrecHome };
+  await $`bun ${binrec} install date`.env(env).quiet();
+
+  const result = await $`bun ${binrec} uninstall date`.env(env).nothrow().quiet();
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toBe(`Uninstalled ${join(binDir, "date")}\n`);
+  expect(await Bun.file(join(binDir, "date")).exists()).toBe(false);
+
+  const which = await $`which date`.env({ ...env, PATH: `${binDir}:${process.env.PATH}` }).quiet();
+  expect(which.stdout.toString().trim()).not.toBe(join(binDir, "date"));
+});
+
+test("binrec uninstall fails for a command without a shim", async () => {
+  const result = await $`bun ${binrec} uninstall date`
+    .env({ ...process.env, BINREC_HOME: binrecHome })
+    .nothrow()
+    .quiet();
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr.toString()).toContain("no shim installed for date");
+});

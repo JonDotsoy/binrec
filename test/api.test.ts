@@ -180,3 +180,20 @@ test("records can only be read by the user who recorded them", async () => {
   expect(dirMode.toString(8)).toBe("700");
   expect(fileMode.toString(8)).toBe("600");
 });
+
+test("b.uninstall removes only binrec shims and keeps the records", async () => {
+  const b = binrec.create({ path: join(tmp, "uninstall", "bin") });
+  const shimPath = await b.install("date");
+  await $`date +%Y`.env({ ...process.env, PATH: `${b.path}:${process.env.PATH}` }).quiet();
+
+  expect(await b.uninstall("date")).toBe(shimPath);
+  expect(await Bun.file(shimPath).exists()).toBe(false);
+  expect(await b.uninstall("date")).toBeNull();
+  expect(await b.lastSession("date")).not.toBeNull();
+
+  // A file binrec did not write is left alone.
+  const other = join(b.path, "other");
+  await Bun.write(other, "#!/usr/bin/env bash\necho hi\n");
+  expect(await b.uninstall("other")).toBeNull();
+  expect(await Bun.file(other).exists()).toBe(true);
+});

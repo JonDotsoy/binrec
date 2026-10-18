@@ -5,6 +5,7 @@ const usage = (b: Binrec) => `Usage:
   binrec --version         Print the binrec version
   binrec install           Create ${b.path} and show how to add it to PATH
   binrec install <bin>     Install a shim for <bin> in ${b.path}
+  binrec uninstall <bin>   Remove the shim for <bin> (records are kept)
   binrec rec [--records <dir>] <path> [...]
                            Run <path> passing stdio through and record it in ${b.records}`;
 
@@ -31,6 +32,21 @@ const install = async (b: Binrec, command?: string) => {
   }
 };
 
+const uninstall = async (b: Binrec, command?: string) => {
+  if (!command) {
+    console.error(usage(b));
+    return 1;
+  }
+
+  const shimPath = await b.uninstall(command);
+  if (!shimPath) {
+    console.error(`binrec: no shim installed for ${command} in ${b.path}`);
+    return 1;
+  }
+  console.log(`Uninstalled ${shimPath}`);
+  return 0;
+};
+
 /** Runs the binrec CLI with `argv` (without the runtime and script) and exits the process. */
 export const runCli = async (argv: string[]) => {
   const b = binrec.create();
@@ -43,6 +59,8 @@ export const runCli = async (argv: string[]) => {
       process.exit(0);
     case "install":
       process.exit(await install(b, rest[0]));
+    case "uninstall":
+      process.exit(await uninstall(b, rest[0]));
     case "rec": {
       let records = b.records;
       if (rest[0] === "--records") {
