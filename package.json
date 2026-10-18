@@ -1,6 +1,9 @@
 {
   "name": "binrec",
   "module": "index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
   "bin": {
     "binrec": "bin/binrec.ts"
   },
