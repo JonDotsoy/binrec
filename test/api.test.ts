@@ -1,6 +1,6 @@
 import { test, expect, beforeAll, afterAll } from "bun:test";
 import { $ } from "bun";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { binrec } from "../index.ts";
@@ -161,4 +161,22 @@ test("chunks that are not valid UTF-8 are recorded as data_base64", async () => 
   const stdout = session!.lines.filter((l) => l.type === "stdout");
   expect(stdout).toHaveLength(1);
   expect(stdout[0]).toMatchObject({ data: null, data_base64: "/2FiYw==" });
+});
+
+test("records can only be read by the user who recorded them", async () => {
+  const records = join(tmp, "private", "records");
+  const binrecBin = new URL("../bin/binrec.ts", import.meta.url).pathname;
+
+  // A permissive umask must not widen the permissions of records.
+  const result = await $`bash -c ${'umask 000 && "$@"'} _ ${process.execPath} ${binrecBin} rec --records ${records} /usr/bin/date +%Y`
+    .nothrow()
+    .quiet();
+  expect(result.exitCode).toBe(0);
+
+  const [recordName] = await readdir(records);
+  const dirMode = (await stat(records)).mode & 0o777;
+  const fileMode = (await stat(join(records, recordName!))).mode & 0o777;
+
+  expect(dirMode.toString(8)).toBe("700");
+  expect(fileMode.toString(8)).toBe("600");
 });

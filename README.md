@@ -68,6 +68,7 @@ Each session is one ndjson file:
 - If a chunk is not valid UTF-8 on its own, `data` is `null` and the raw bytes are in `data_base64`, so nothing is lost.
 - On a terminal, `resize` lines hold the window size (`cols`, `rows`): one at the start and one each time the window changes.
 - The last line (`end`) has the exit code.
+- Records are private: each file is created with mode `0600` and a records folder binrec creates gets `0700`, so only the user who recorded a session can read it, whatever the `umask`.
 - `timestamp` is wall-clock time (ISO 8601) and `performance` is `performance.now()` in the recording process.
 
 ## Library
@@ -118,6 +119,10 @@ bun run build   # writes dist/binrec.js and dist/package.json
 `dist/binrec.js` is both the library and the `binrec` bin. Only `dist/` is published; the root `package.json` is private.
 
 Releases run from the **publish** GitHub Actions workflow (`workflow_dispatch`, with a `patch`, `minor` or `major` bump). It runs the tests, builds, publishes `dist/` to npm with trusted publishing (OIDC), tags the version and creates a GitHub release.
+
+## Security
+
+Records can contain secrets. See [SECURITY.md](SECURITY.md) for how records are protected and how to report a vulnerability.
 
 ## License
 
