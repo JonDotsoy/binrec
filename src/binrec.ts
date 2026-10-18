@@ -36,7 +36,14 @@ export type Binrec = {
   lastSession(command: string): Promise<Session | null>;
 };
 
-const cliEntry = resolve(new URL("../bin/binrec.ts", import.meta.url).pathname);
+// Set by scripts/build.ts: in dist/binrec.js the bundle itself is the CLI.
+declare const BINREC_BUNDLED: boolean | undefined;
+
+/** Script the shims run as `bun <cliEntry> rec …`. */
+const cliEntry =
+  typeof BINREC_BUNDLED !== "undefined" && BINREC_BUNDLED
+    ? import.meta.path
+    : resolve(import.meta.dir, "../bin/binrec.ts");
 
 export const defaultPath = () =>
   join(process.env.BINREC_HOME ?? join(homedir(), ".binrec"), "bin");
