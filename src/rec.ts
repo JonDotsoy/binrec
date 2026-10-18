@@ -1,5 +1,6 @@
 import { mkdir, open } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
+import { addToStats } from "./stats.ts";
 
 export type RecOptions = {
   /** Folder where the `<sessionId>.ndjson` record is written, or `false` to run without recording. */
@@ -180,6 +181,8 @@ const recInPipes = async (command: string, args: string[], write: Write) => {
  * - `{ type: "end", timestamp, performance, exitCode, total }`, where `total` is the
  *   sum of every chunk's `size`
  *
+ * After the session, its `total` is added to `<records>/stats.json`.
+ *
  * When both stdin and stdout are a terminal, the program runs on a pseudo
  * terminal so interactive programs keep working; otherwise it runs with pipes.
  */
@@ -227,6 +230,12 @@ export const rec = async (
 
   write({ type: "end", ...stamp(), exitCode, total });
   await record.end();
+
+  try {
+    await addToStats(records, command, total);
+  } catch {
+    // The totals are a cache that `binrec stats` can rebuild; never fail the command over them.
+  }
 
   return { exitCode, sessionId, recordPath };
 };

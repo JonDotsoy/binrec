@@ -2,11 +2,13 @@ import { mkdir, chmod, readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { DISABLED_MARKER, readConfig, type Config, rec } from "./rec.ts";
-import { lastSession, sessions, stats, type Session, type Stats } from "./sessions.ts";
+import { lastSession, sessions, type Session } from "./sessions.ts";
+import { stats, type Stats } from "./stats.ts";
 
 export { rec } from "./rec.ts";
 export type { Config, RecOptions, RecResult } from "./rec.ts";
-export type { CommandStats, RecordLine, Session, Stats } from "./sessions.ts";
+export type { RecordLine, Session } from "./sessions.ts";
+export type { CommandStats, Stats } from "./stats.ts";
 
 export type CreateOptions = {
   /** Folder where shims are installed. Defaults to `$BINREC_HOME/bin` or `~/.binrec/bin`. */
