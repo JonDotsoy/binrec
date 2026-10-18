@@ -90,3 +90,16 @@ test("binrec play fails for an unknown session", async () => {
   expect(result.exitCode).toBe(1);
   expect(result.stderr.toString()).toBe(`binrec: no recorded session nope in ${b.records}\n`);
 });
+
+test("binrec list --help and binrec play --help show the command's help", async () => {
+  for (const flag of ["--help", "-h"]) {
+    const list = await $`bun ${binrec} list ${flag}`.env(env).nothrow().quiet();
+    expect(list.exitCode).toBe(0);
+    expect(list.stdout.toString()).toStartWith("Usage: binrec list [<bin>]\n");
+
+    const play = await $`bun ${binrec} play ${flag}`.env(env).nothrow().quiet();
+    expect(play.exitCode).toBe(0);
+    expect(play.stdout.toString()).toStartWith("Usage: binrec play [--speed <n>] <id>\n");
+    expect(play.stdout.toString()).toContain("--speed <n>");
+  }
+});

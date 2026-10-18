@@ -70,7 +70,7 @@ Commands that consumed the most:
   2. /usr/bin/date     29 B  1 session
 ```
 
-`binrec list` shows the id `binrec play` takes:
+`binrec list` shows the id `binrec play` takes (`binrec list --help` and `binrec play --help` show each command's help):
 
 ```console
 $ binrec list

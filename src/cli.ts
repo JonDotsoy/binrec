@@ -21,6 +21,25 @@ const usage = (b: Binrec) => `Usage:
   binrec rec [--records <dir>] [--config <file>] <path> [...]
                            Run <path> passing stdio through and record it in ${b.records}`;
 
+/** Help of each command, shown by `binrec <command> --help`. */
+const commandHelp: Record<string, (b: Binrec) => string> = {
+  list: (b) => `Usage: binrec list [<bin>]
+
+List the sessions recorded in ${b.records}, oldest first, with their id,
+start time, exit code, size and command line. With <bin> (a name like date
+or an absolute path), list only the sessions of that binary.
+Pass an id to binrec play to play a session back.`,
+  play: (b) => `Usage: binrec play [--speed <n>] <id>
+
+Play the session <id> from ${b.records} back: write its stdout and
+stderr again, each chunk as long after the start as it was recorded.
+The start of an id is enough when it matches only one session.
+
+  --speed <n>   Play <n> times faster (default: 1); 0 writes everything at once`,
+};
+
+const isHelpFlag = (arg?: string) => arg === "--help" || arg === "-h";
+
 const install = async (b: Binrec, command?: string) => {
   if (!command) {
     await b.init();
@@ -167,6 +186,12 @@ const playSession = async (b: Binrec, args: string[]) => {
 export const runCli = async (argv: string[]) => {
   const b = binrec.create();
   const [command, ...rest] = argv;
+
+  // `binrec <command> --help` shows that command's help instead of running it.
+  if (command && command in commandHelp && isHelpFlag(rest[0])) {
+    console.log(commandHelp[command]!(b));
+    process.exit(0);
+  }
 
   switch (command) {
     case "--version":
