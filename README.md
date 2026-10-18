@@ -54,7 +54,7 @@ binrec rec --records ./records /usr/bin/date +%F
 | `binrec on <bin>` / `binrec off <bin>` | Same as `binrec install <bin>` / `binrec uninstall <bin>` (`off --all` works too). |
 | `binrec stats` | Shows how many sessions were recorded, how many bytes they consumed in total, and a ranking of the commands that consumed the most. |
 | `binrec list [<bin>]` | Lists the recorded sessions, oldest first, with their id, start time, exit code, size and command line. With `<bin>`, only the sessions of that binary. |
-| `binrec play [--timestamps] [--speed <n>] <id>` | Plays session `<id>` back: writes its `stdout` and `stderr` again, each chunk as long after the start as it was recorded. The start of an id is enough when it matches only one session. `--timestamps` (`-t`) shows every line with its recorded timestamp, the time since the start and its stream. `--speed 2` plays twice as fast and `--speed 0` writes everything at once. |
+| `binrec play [--timestamps] [--no-wait \| --speed <n>] <id>` | Plays session `<id>` back: writes its `stdout` and `stderr` again, each chunk as long after the start as it was recorded. The start of an id is enough when it matches only one session. `--timestamps` (`-t`) shows every line with its recorded timestamp, the time since the start and its stream. `--no-wait` (`-n`) writes the whole output at once, to see how the session ended. `--speed 2` plays twice as fast, `--speed 0.5` half as fast, and `--speed 0` is the same as `--no-wait`. |
 | `binrec rec [--records <dir>] [--config <file>] <path> [args…]` | Runs `<path>`, passes stdio through, records the session and exits with its exit code. |
 | `binrec --version` (`-v`) | Prints the binrec version. |
 | `binrec --help` (`-h`) | Prints every command. `binrec <command> --help` (or `-h`) prints the help of one command without running it. For `rec`, only a lone `binrec rec --help` does; with more arguments, `--help` goes to the recorded program. |
@@ -70,22 +70,6 @@ Commands that consumed the most:
   1. /usr/bin/cat   17.4 KB  2 sessions
   2. /usr/bin/date     29 B  1 session
 ```
-
-`binrec list` shows the id `binrec play` takes:
-
-```console
-$ binrec list
-ID                                    STARTED               EXIT  SIZE  COMMAND
-8969d708-1c2e-4f0a-9b1d-3f6e2a7c5d10  2026-10-18T04:05:14Z     0  11 B  /usr/bin/date +%F
-$ binrec play 8969d708
-2026-10-18
-$ binrec play -t 8969d708
-2026-10-18T04:05:14.936Z    +0.000s  $       /usr/bin/date +%F
-2026-10-18T04:05:14.949Z    +0.014s  stdout  2026-10-18
-2026-10-18T04:05:14.950Z    +0.015s  exit    0
-```
-
-`play` does not write the `stdin` chunks back: on a terminal, what you typed is already in `stdout` as the terminal's echo.
 
 Set `BINREC_HOME` to use a folder other than `~/.binrec`.
 
@@ -103,6 +87,46 @@ Settings are saved in `~/.binrec/config.json`. For now it holds one setting, wri
 | `records/` | One `<sessionId>.ndjson` file per recorded session, and its `<sessionId>.stats.json`. |
 | `records/<sessionId>.stats.json` | `{ sessionId, command, total }` of one finished session, written when it ends. `binrec stats` writes it for older records that do not have one; a stats file whose record was deleted is not counted. |
 | `config.json` | binrec's settings. A missing file means the defaults (recording on). |
+
+### Playing a session back
+
+`binrec list` shows the id of every recorded session; `binrec play` takes one of them, or just its start:
+
+```console
+$ binrec list
+ID                                    STARTED               EXIT  SIZE  COMMAND
+e531b87f-3f0c-4b7e-9a51-2c8d0f6a4e21  2026-10-18T16:31:43Z     0  50 B  /usr/bin/sh -c 'echo "building..."; sleep 1.2; echo "warning: unused variable" >&2; sleep 0.8; echo "done in 2.0s"'
+```
+
+`binrec play <id>` writes the session's `stdout` and `stderr` again with the recorded timing, so it looks just like the original run (stderr in red here):
+
+![binrec play replaying a session with its recorded timing](docs/play.svg)
+
+`--timestamps` (`-t`) shows when each line was written: its recorded timestamp, the time since the session started and its stream, with the command line first and the exit code last:
+
+![binrec play -t showing the timestamp, elapsed time and stream of every line](docs/play-timestamps.svg)
+
+```console
+$ binrec play -t e531b87f
+2026-10-18T16:31:43.597Z    +0.000s  $       /usr/bin/sh -c 'echo "building..."; sleep 1.2; echo "warning: unused variable" >&2; sleep 0.8; echo "done in 2.0s"'
+2026-10-18T16:31:43.602Z    +0.005s  stdout  building...
+2026-10-18T16:31:44.800Z    +1.202s  stderr  warning: unused variable
+2026-10-18T16:31:45.602Z    +2.004s  stdout  done in 2.0s
+2026-10-18T16:31:45.603Z    +2.004s  exit    0
+```
+
+To skip the waits or change the pace:
+
+```sh
+binrec play --no-wait e531b87f    # the whole output at once, to see how the session ended (also: -n)
+binrec play --speed 4 e531b87f    # four times faster
+binrec play --speed 0.5 e531b87f  # half as fast
+binrec play -t -n e531b87f        # every line with its timestamp, without waiting
+```
+
+`play` keeps each stream on its own: `binrec play <id> 2>/dev/null` shows only what went to `stdout`. It does not write the `stdin` chunks back: on a terminal, what you typed is already in `stdout` as the terminal's echo.
+
+The animations above are made from a real record with `bun scripts/demo-svg.ts <record.ndjson> docs/play.svg [--timestamps]`.
 
 ## Record format
 

@@ -17,10 +17,10 @@ const usage = (b: Binrec) => `Usage:
                            rank the commands that consumed the most
   binrec list [<bin>]      List the recorded sessions (of <bin> only, if given) with
                            their id, oldest first
-  binrec play [--timestamps] [--speed <n>] <id>
+  binrec play [--timestamps] [--no-wait | --speed <n>] <id>
                            Play the session <id> back, writing its output with the
-                           recorded timing (<n> times faster; 0 writes it at once);
-                           --timestamps shows when each line was written
+                           recorded timing (<n> times faster); --no-wait writes it
+                           at once and --timestamps shows when each line was written
   binrec rec [--records <dir>] [--config <file>] <path> [...]
                            Run <path> passing stdio through and record it in ${b.records}`;
 
@@ -64,7 +64,7 @@ List the sessions recorded in ${b.records}, oldest first, with their id,
 start time, exit code, size and command line. With <bin> (a name like date
 or an absolute path), list only the sessions of that binary.
 Pass an id to binrec play to play a session back.`,
-  play: (b) => `Usage: binrec play [--timestamps] [--speed <n>] <id>
+  play: (b) => `Usage: binrec play [--timestamps] [--no-wait | --speed <n>] <id>
 
 Play the session <id> from ${b.records} back: write its stdout and
 stderr again, each chunk as long after the start as it was recorded.
@@ -73,7 +73,10 @@ The start of an id is enough when it matches only one session.
   --timestamps, -t  Show every line with its recorded timestamp, the time since
                     the session started and its stream (stdout or stderr), the
                     command line first and the exit code last
-  --speed <n>       Play <n> times faster (default: 1); 0 writes everything at once`,
+  --no-wait, -n     Write the whole output at once, without the recorded
+                    waits, to see how the session ended (same as --speed 0)
+  --speed <n>       Play <n> times faster (default: 1): 2 is twice as fast,
+                    0.5 half as fast and 0 writes everything at once`,
 };
 
 const aliases: Record<string, string> = { enable: "on", disable: "off" };
@@ -207,7 +210,13 @@ const printList = async (b: Binrec, command?: string) => {
 const playSession = async (b: Binrec, args: string[]) => {
   let speed = 1;
   let timestamps = false;
-  while (args[0] === "--speed" || args[0] === "--timestamps" || args[0] === "-t") {
+  const flags = ["--speed", "--timestamps", "-t", "--no-wait", "-n"];
+  while (flags.includes(args[0]!)) {
+    if (args[0] === "--no-wait" || args[0] === "-n") {
+      speed = 0;
+      args = args.slice(1);
+      continue;
+    }
     if (args[0] !== "--speed") {
       timestamps = true;
       args = args.slice(1);
