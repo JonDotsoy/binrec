@@ -9,6 +9,8 @@ const usage = (b: Binrec) => `Usage:
   binrec uninstall --all   Remove every shim in ${b.path} (records are kept)
   binrec on                Turn recording on (also: binrec enable)
   binrec off               Turn recording off, shims still run (also: binrec disable)
+  binrec on <bin>          Same as binrec install <bin>
+  binrec off <bin>         Same as binrec uninstall <bin>
   binrec rec [--records <dir>] <path> [...]
                            Run <path> passing stdio through and record it in ${b.records}`;
 
@@ -73,11 +75,13 @@ export const runCli = async (argv: string[]) => {
       process.exit(await uninstall(b, rest[0]));
     case "on":
     case "enable":
+      if (command === "on" && rest[0]) process.exit(await install(b, rest[0]));
       await b.enableRecords();
       console.log(`Recording is on: sessions are saved in ${b.records}`);
       process.exit(0);
     case "off":
     case "disable":
+      if (command === "off" && rest[0]) process.exit(await uninstall(b, rest[0]));
       await b.disableRecords();
       console.log("Recording is off: shims run the real binary without recording");
       process.exit(0);

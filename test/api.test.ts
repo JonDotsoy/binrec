@@ -219,3 +219,12 @@ test("b.off and b.on are aliases of disableRecords and enableRecords", async () 
   await b.on();
   expect(await b.isRecording()).toBe(true);
 });
+
+test("b.on(command) and b.off(command) install and uninstall", async () => {
+  const b = binrec.create({ path: join(tmp, "aliases-cmd", "bin") });
+  const shimPath = await b.on("date");
+  expect(shimPath).toBe(join(b.path, "date"));
+  expect(await b.off("date")).toBe(shimPath);
+  expect(await Bun.file(join(b.path, "date")).exists()).toBe(false);
+  expect(await b.isRecording()).toBe(true);
+});

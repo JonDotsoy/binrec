@@ -121,3 +121,19 @@ test("binrec off and on turn recording off and back on", async () => {
   await $`bun ${binrec} enable`.env(env).quiet();
   expect(await Bun.file(marker).exists()).toBe(false);
 });
+
+test("binrec on <bin> and off <bin> install and uninstall the shim", async () => {
+  const env = { ...process.env, BINREC_HOME: binrecHome };
+
+  const on = await $`bun ${binrec} on date`.env(env).nothrow().quiet();
+  expect(on.exitCode).toBe(0);
+  expect(on.stdout.toString()).toBe(`Installed ${join(binDir, "date")}\n`);
+  expect(await Bun.file(join(binDir, "date")).exists()).toBe(true);
+
+  const off = await $`bun ${binrec} off date`.env(env).nothrow().quiet();
+  expect(off.exitCode).toBe(0);
+  expect(off.stdout.toString()).toBe(`Uninstalled ${join(binDir, "date")}\n`);
+  expect(await Bun.file(join(binDir, "date")).exists()).toBe(false);
+  // Only the shim went away; recording itself stays on.
+  expect(await Bun.file(join(binrecHome, "records", ".disabled")).exists()).toBe(false);
+});
