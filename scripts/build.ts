@@ -25,17 +25,27 @@ if (!result.success) {
 
 await chmod(join(outdir, "binrec.js"), 0o755);
 
+// npm shows the README of the published folder on the package page.
+for (const file of ["README.md", "LICENSE"]) {
+  await Bun.write(join(outdir, file), Bun.file(join(root, file)));
+}
+
 await Bun.write(
   join(outdir, "package.json"),
   `${JSON.stringify(
     {
       name: pkg.name,
       version: pkg.version,
+      description: pkg.description,
+      license: pkg.license,
+      author: pkg.author,
+      homepage: pkg.homepage,
+      bugs: pkg.bugs,
       type: "module",
       module: "binrec.js",
       exports: { ".": "./binrec.js" },
       bin: { binrec: "binrec.js" },
-      repository: { type: "git", url: "git+https://github.com/JonDotsoy/binrec.git" },
+      repository: pkg.repository,
       // The root package.json stays `private` so it is never published by
       // mistake; dist is published to npm as a public package.
       publishConfig: { registry: "https://registry.npmjs.org/", access: "public" },
@@ -45,4 +55,4 @@ await Bun.write(
   )}\n`,
 );
 
-console.log(`Built ${join("dist", "binrec.js")} and ${join("dist", "package.json")}`);
+console.log(`Built ${join("dist", "binrec.js")}, ${join("dist", "package.json")}, README.md and LICENSE`);

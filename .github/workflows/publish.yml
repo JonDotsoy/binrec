@@ -67,10 +67,39 @@ jobs:
           git push origin HEAD "v${{ steps.version.outputs.version }}"
 
       - name: Create GitHub release
-        run: |
-          gh release create "v${{ steps.version.outputs.version }}" \
-            "${{ steps.pack.outputs.tarball }}" dist/binrec.js \
-            --title "v${{ steps.version.outputs.version }}" \
-            --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: |
+          SHA256=$(sha256sum dist/binrec.js | cut -d' ' -f1)
+          cat > "$RUNNER_TEMP/notes.md" <<EOF
+          npm: https://www.npmjs.com/package/@jondotsoy/binrec/v/${VERSION}
+
+          ### Homebrew
+
+          \`\`\`ruby
+          class Binrec < Formula
+            desc "Record everything a command reads and writes"
+            homepage "https://github.com/JonDotsoy/binrec"
+            url "https://github.com/JonDotsoy/binrec/releases/download/v${VERSION}/binrec.js"
+            version "${VERSION}"
+            sha256 "${SHA256}"
+            license "MIT"
+
+            depends_on "oven-sh/bun/bun"
+
+            def install
+              bin.install "binrec.js" => "binrec"
+            end
+
+            test do
+              system bin/"binrec"
+            end
+          end
+          \`\`\`
+          EOF
+          gh release create "v${VERSION}" "$TARBALL" dist/binrec.js \
+            --title "v${VERSION}" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            --generate-notes
