@@ -1,7 +1,27 @@
 {
   "name": "@jondotsoy/binrec",
   "version": "0.0.7",
-  "description": "Record everything a command reads and writes",
+  "description": "Record and replay everything a command reads and writes: transparent PATH shims capture stdin, stdout, stderr and exit codes to ndjson, with terminal and browser playback",
+  "keywords": [
+    "cli",
+    "bun",
+    "terminal",
+    "recorder",
+    "session-recording",
+    "replay",
+    "playback",
+    "shim",
+    "stdin",
+    "stdout",
+    "stderr",
+    "ndjson",
+    "logging",
+    "audit",
+    "debugging",
+    "testing",
+    "command-line",
+    "xterm"
+  ],
   "license": "MIT",
   "author": {
     "name": "Jonathan Delgado",
