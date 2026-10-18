@@ -263,6 +263,8 @@ section.block { padding: 96px 0; }
 .panel-copy code, .card code, .lagoon code, .gradient code { font-size: .9em; background: var(--color-warm-parchment); padding: 1px 5px; border-radius: 5px; color: var(--color-ink-charcoal); }
 .panel-term { background: var(--color-paper-white); border: 1px solid var(--color-soft-mist); border-radius: var(--radius-cards); padding: 24px; overflow: hidden; }
 .panel-term .term { font-size: 13px; }
+.panel-term img { display: block; width: 100%; height: auto; border-radius: 8px; }
+.example .panel + .panel { margin-top: 16px; }
 
 /* Feature cards */
 .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
@@ -545,7 +547,7 @@ e531b87f-3f0c-4b7e-9a51-2c8d0f6a4e21  2026-10-18T16:31:43Z     <span class="ok">
             <h3>Replay it with the original timing</h3>
             <p><code>binrec play &lt;id&gt;</code> writes stdout and stderr again, each chunk as long after the start as it was recorded. Streams stay apart, so <code>2&gt;/dev/null</code> works.</p>
             <ul>
-              <li><code>-t</code> shows each line's timestamp, elapsed time and stream.</li>
+              <li><code>-t</code> shows each line's timestamp, elapsed time and stream, and what the program read on stdin.</li>
               <li><code>-n</code> writes everything at once. <code>--speed 4</code> plays four times faster.</li>
               <li><code>--ui</code> opens the <a href="#play-ui">browser player</a>.</li>
             </ul>
@@ -574,6 +576,52 @@ Commands that consumed the most:
   1. /usr/bin/cat   17.4 KB  2 sessions
   2. /usr/bin/date     29 B  1 session</pre>
           </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block example" id="pipe" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Example</p>
+          <h2 class="heading-lg">Record both sides of a pipe.</h2>
+        </div>
+        <p>With a shim for <code>echo</code> and one for <code>cat</code>, <code>echo "hola mundo" | cat</code> records two sessions: what each command received and what it wrote. These are real recordings.</p>
+      </div>
+
+      <div class="panel">
+        <div class="panel-copy">
+          <h3>Install the shims, run the pipe, list the sessions</h3>
+          <p><code>echo</code> is also a shell builtin, which never looks at <code>PATH</code>, so <code>env echo</code> runs the binary and its shim. <code>cat</code> runs through its shim as usual.</p>
+          <ul>
+            <li>The pipe prints <code>hola mundo</code>, exactly as without binrec.</li>
+            <li><code>binrec list</code> shows one session per command.</li>
+          </ul>
+        </div>
+        <div class="panel-term">
+          <img src="pipe.gif" alt="Installing shims for echo and cat, running env echo &quot;hola mundo&quot; | cat and listing the two recorded sessions" width="867" height="258" loading="lazy" decoding="async">
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-copy">
+          <h3>What <code>echo</code> did</h3>
+          <p><code>binrec play -t</code> on the echo session: it ran with the argument <code>hola mundo</code>, read nothing on stdin, wrote <code>hola mundo</code> on stdout and exited with 0.</p>
+        </div>
+        <div class="panel-term">
+          <img src="play-echo.gif" alt="binrec play -t on the echo session: the command, one stdout line and exit 0" width="722" height="176" loading="lazy" decoding="async">
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-copy">
+          <h3>What <code>cat</code> did</h3>
+          <p>The cat session: it received <code>hola mundo</code> from the pipe on stdin, wrote the same line on stdout and exited with 0.</p>
+        </div>
+        <div class="panel-term">
+          <img src="play-cat.gif" alt="binrec play -t on the cat session: the command, one stdin line, one stdout line and exit 0" width="722" height="176" loading="lazy" decoding="async">
         </div>
       </div>
     </div>

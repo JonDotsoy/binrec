@@ -129,6 +129,23 @@ test("binrec play --timestamps shows every line with its timestamp, elapsed time
   expect(result.stderr.toString()).toMatch(row(at("stderr"), "stderr", "dos\n"));
 });
 
+test("binrec play --timestamps lists what the program read on stdin", async () => {
+  const cat = Bun.which("cat")!;
+  await $`printf 'hola\nmundo\n' | bun ${binrec} rec ${cat}`.env(env).quiet();
+  const sessionId = (await b.sessions()).at(-1)!.sessionId;
+
+  const plain = await $`bun ${binrec} play -n ${sessionId}`.env(env).quiet();
+  expect(plain.stdout.toString()).toBe("hola\nmundo\n");
+
+  const result = await $`bun ${binrec} play -t -n ${sessionId}`.env(env).quiet();
+  const streams = result.stdout
+    .toString()
+    .trimEnd()
+    .split("\n")
+    .map((line) => line.split(/ +/).slice(2).join(" "));
+  expect(streams).toEqual([`$ ${cat}`, "stdin hola", "stdin mundo", "stdout hola", "stdout mundo", "exit 0"]);
+});
+
 test("binrec play --no-wait writes the whole session at once and --speed slows it down", async () => {
   const sessionId = await record("sh", "-c", "printf a; sleep 0.4; printf b");
 
