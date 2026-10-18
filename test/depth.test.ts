@@ -33,30 +33,47 @@ test("a shim that calls itself stops at maxDepth", async () => {
 
   const result = await $`timeout 30 date +%Y`.env(env).nothrow().quiet();
   expect(result.exitCode).toBe(1);
-  expect(result.stderr.toString()).toContain("10 binrec sessions are already nested (maxDepth 10)");
+  expect(result.stderr.toString()).toContain("10 sessions of date are already nested (BINREC_DEPTH_DATE, maxDepth 10)");
   expect(await countRecords(join(home, "records"))).toBe(10);
 });
 
-test("maxDepth in config.json sets the limit", async () => {
+test("maxDepth in config.json limits the sessions of one command", async () => {
   const home = join(tmp, "config");
   const config = join(home, "config.json");
   const records = join(home, "records");
   await Bun.write(config, `${JSON.stringify({ maxDepth: 2 })}\n`);
-  const rec = (depth: string) =>
-    $`bun ${binrec} rec --records ${records} --config ${config} sh -c ${"echo $BINREC_DEPTH"}`
-      .env({ ...process.env, BINREC_DEPTH: depth })
+  const rec = (env: Record<string, string>) =>
+    $`bun ${binrec} rec --records ${records} --config ${config} sh -c ${"echo $BINREC_DEPTH $BINREC_DEPTH_SH"}`
+      .env({ ...process.env, ...env })
       .nothrow()
       .quiet();
 
-  const inside = await rec("1");
+  const inside = await rec({ BINREC_DEPTH: "1", BINREC_DEPTH_SH: "1" });
   expect(inside.exitCode).toBe(0);
-  expect(inside.stdout.toString()).toBe("2\n");
+  expect(inside.stdout.toString()).toBe("2 2\n");
 
-  const past = await rec("2");
+  const past = await rec({ BINREC_DEPTH: "2", BINREC_DEPTH_SH: "2" });
   expect(past.exitCode).toBe(1);
   expect(past.stdout.toString()).toBe("");
-  expect(past.stderr.toString()).toContain("2 binrec sessions are already nested (maxDepth 2)");
+  expect(past.stderr.toString()).toContain("2 sessions of sh are already nested (BINREC_DEPTH_SH, maxDepth 2)");
   expect(await countRecords(records)).toBe(1);
+});
+
+test("the overall BINREC_DEPTH has no limit", async () => {
+  const records = join(tmp, "overall");
+  const result = await $`bun ${binrec} rec --records ${records} sh -c ${"echo $BINREC_DEPTH $BINREC_DEPTH_SH"}`
+    .env({ ...process.env, BINREC_DEPTH: "50", BINREC_DEPTH_SH: "" })
+    .nothrow()
+    .quiet();
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toBe("51 1\n");
+});
+
+test("command depth variables use the command name in upper case", async () => {
+  const { commandDepthEnv } = await import("../src/rec.ts");
+  expect(commandDepthEnv("/usr/bin/date")).toBe("BINREC_DEPTH_DATE");
+  expect(commandDepthEnv("/usr/local/bin/docker-compose")).toBe("BINREC_DEPTH_DOCKER_COMPOSE");
+  expect(commandDepthEnv("python3.12")).toBe("BINREC_DEPTH_PYTHON3_12");
 });
 
 test("a shim for bash runs the real bash", async () => {

@@ -81,7 +81,7 @@ Settings are saved in `~/.binrec/config.json`:
 ```
 
 - `recording` is written by `binrec on` / `binrec off`.
-- `maxDepth` (default `10`) is how many binrec sessions can run nested inside each other. Every session sets `BINREC_DEPTH` to one more for the program it runs; a session past the limit prints an error and exits with code 1 without running the program. This stops a shim that ends up calling itself (for example through a symlinked `PATH` entry) instead of starting sessions forever.
+- `maxDepth` (default `10`) is how many sessions of the same command can run nested inside each other. Every session passes two counters, one more than its own, to the program it runs: `BINREC_DEPTH` counts every nested binrec session, and `BINREC_DEPTH_<COMMAND>` (for example `BINREC_DEPTH_DATE`; characters other than letters and digits become `_`) counts the sessions of that command. A session whose `BINREC_DEPTH_<COMMAND>` already reached `maxDepth` prints an error and exits with code 1 without running the program. This stops a shim that ends up calling itself (for example through a symlinked `PATH` entry) instead of starting sessions forever, while different recorded commands can still call each other at any depth.
 
 `~/.binrec` contains:
 
