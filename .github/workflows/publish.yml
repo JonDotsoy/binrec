@@ -14,6 +14,8 @@ on:
 
 permissions:
   contents: write
+  # npm trusted publishing (OIDC), no npm token needed.
+  id-token: write
 
 concurrency:
   group: publish
@@ -31,8 +33,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or newer.
+      - run: npm install -g npm@^11.5.1
 
       - run: bun install --frozen-lockfile
 
@@ -52,8 +57,6 @@ jobs:
 
       - name: Publish dist to npm
         run: npm publish dist/
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Commit and tag the new version
         run: |
