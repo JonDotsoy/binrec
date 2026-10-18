@@ -52,9 +52,18 @@ const encodeChunk = (chunk: Uint8Array) => {
   }
 };
 
+
 const stamp = () => ({
   timestamp: new Date().toISOString(),
   performance: performance.now(),
+});
+
+/** Builds a `stdin`/`stdout`/`stderr` line; `size` is the chunk's length in bytes. */
+const chunkLine = (type: "stdin" | "stdout" | "stderr", chunk: Uint8Array) => ({
+  type,
+  ...stamp(),
+  size: chunk.byteLength,
+  ...encodeChunk(chunk),
 });
 
 type Write = (line: Record<string, unknown>) => void;
@@ -78,7 +87,7 @@ const recInTerminal = async (command: string, args: string[], write: Write) => {
     name: process.env.TERM || "xterm-256color",
     data(_terminal, chunk) {
       stdout.write(chunk);
-      write({ type: "stdout", ...stamp(), ...encodeChunk(chunk) });
+      write(chunkLine("stdout", chunk));
     },
     exit() {
       closed();
@@ -92,7 +101,7 @@ const recInTerminal = async (command: string, args: string[], write: Write) => {
     write({ type: "resize", ...stamp(), cols, rows });
   };
   const onInput = (chunk: Uint8Array) => {
-    write({ type: "stdin", ...stamp(), ...encodeChunk(chunk) });
+    write(chunkLine("stdin", chunk));
     terminal.write(chunk);
   };
 
@@ -133,7 +142,7 @@ const recInPipes = async (command: string, args: string[], write: Write) => {
   ) => {
     for await (const chunk of source) {
       sink.write(chunk);
-      write({ type, ...stamp(), ...encodeChunk(chunk) });
+      write(chunkLine(type, chunk));
     }
   };
 
@@ -141,7 +150,7 @@ const recInPipes = async (command: string, args: string[], write: Write) => {
   void (async () => {
     try {
       for await (const chunk of process.stdin as AsyncIterable<Uint8Array>) {
-        write({ type: "stdin", ...stamp(), ...encodeChunk(chunk) });
+        write(chunkLine("stdin", chunk));
         child.stdin.write(chunk);
         await child.stdin.flush();
       }
@@ -164,10 +173,12 @@ const recInPipes = async (command: string, args: string[], write: Write) => {
  *
  * Record lines, in order:
  * - `{ type: "command", sessionId, timestamp, performance, command, args }`
- * - `{ type: "stdin" | "stdout" | "stderr", timestamp, performance, data }`, where
- *   `data` is `null` and `data_base64` holds the bytes if the chunk is not valid UTF-8
+ * - `{ type: "stdin" | "stdout" | "stderr", timestamp, performance, size, data }`, where
+ *   `size` is the chunk's length in bytes, and `data` is `null` and `data_base64`
+ *   holds the bytes if the chunk is not valid UTF-8
  * - `{ type: "resize", timestamp, performance, cols, rows }` when run on a terminal
- * - `{ type: "end", timestamp, performance, exitCode }`
+ * - `{ type: "end", timestamp, performance, exitCode, total }`, where `total` is the
+ *   sum of every chunk's `size`
  *
  * When both stdin and stdout are a terminal, the program runs on a pseudo
  * terminal so interactive programs keep working; otherwise it runs with pipes.
@@ -201,7 +212,9 @@ export const rec = async (
   await mkdir(records, { recursive: true, mode: RECORDS_DIR_MODE });
   await (await open(recordPath, "wx", RECORD_FILE_MODE)).close();
   const record = Bun.file(recordPath).writer();
+  let total = 0;
   const write: Write = (line) => {
+    if (typeof line.size === "number") total += line.size;
     record.write(`${JSON.stringify(line)}\n`);
   };
 
@@ -212,7 +225,7 @@ export const rec = async (
     ? await recInTerminal(command, args, write)
     : await recInPipes(command, args, write);
 
-  write({ type: "end", ...stamp(), exitCode });
+  write({ type: "end", ...stamp(), exitCode, total });
   await record.end();
 
   return { exitCode, sessionId, recordPath };

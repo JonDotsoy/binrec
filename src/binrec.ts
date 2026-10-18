@@ -2,11 +2,11 @@ import { mkdir, chmod, readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { DISABLED_MARKER, readConfig, type Config, rec } from "./rec.ts";
-import { lastSession, sessions, type Session } from "./sessions.ts";
+import { lastSession, sessions, stats, type Session, type Stats } from "./sessions.ts";
 
 export { rec } from "./rec.ts";
 export type { Config, RecOptions, RecResult } from "./rec.ts";
-export type { RecordLine, Session } from "./sessions.ts";
+export type { CommandStats, RecordLine, Session, Stats } from "./sessions.ts";
 
 export type CreateOptions = {
   /** Folder where shims are installed. Defaults to `$BINREC_HOME/bin` or `~/.binrec/bin`. */
@@ -47,6 +47,8 @@ export type Binrec = {
   sessions(command: string): Promise<Session[]>;
   /** The most recent recorded session of `command`, or `null` if there is none. */
   lastSession(command: string): Promise<Session | null>;
+  /** Bytes consumed by every recorded session, overall and per command (most first). */
+  stats(): Promise<Stats>;
 };
 
 // Set by scripts/build.ts: in dist/binrec.js the bundle itself is the CLI.
@@ -157,6 +159,7 @@ const create = (options: CreateOptions = {}): Binrec => {
     isRecording,
     sessions: (command) => sessions(records, command),
     lastSession: (command) => lastSession(records, command),
+    stats: () => stats(records),
   };
 };
 

@@ -11,6 +11,8 @@ const usage = (b: Binrec) => `Usage:
   binrec off               Turn recording off, shims still run (also: binrec disable)
   binrec on <bin>          Same as binrec install <bin>
   binrec off <bin>         Same as binrec uninstall <bin>
+  binrec stats             Show how many bytes the recorded sessions consumed and
+                           rank the commands that consumed the most
   binrec rec [--records <dir>] [--config <file>] <path> [...]
                            Run <path> passing stdio through and record it in ${b.records}`;
 
@@ -59,6 +61,44 @@ const uninstall = async (b: Binrec, command?: string) => {
   return 0;
 };
 
+/** Formats a byte count for people, like `1.5 KB`. */
+const formatBytes = (bytes: number) => {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return unit === 0 ? `${bytes} B` : `${value.toFixed(1)} ${units[unit]}`;
+};
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+const printStats = async (b: Binrec) => {
+  const { sessions, total, commands } = await b.stats();
+  if (sessions === 0) {
+    console.log(`No recorded sessions in ${b.records}`);
+    return 0;
+  }
+
+  console.log(`Sessions: ${sessions}`);
+  console.log(`Consumed: ${formatBytes(total)} (${plural(total, "byte")})`);
+  console.log("");
+  console.log("Commands that consumed the most:");
+  const width = Math.max(...commands.map(({ command }) => command.length));
+  const sizes = commands.map(({ total }) => formatBytes(total));
+  const sizeWidth = Math.max(...sizes.map((size) => size.length));
+  const rankWidth = String(commands.length).length;
+  commands.forEach(({ command, sessions }, index) => {
+    const rank = `${index + 1}.`.padStart(rankWidth + 1);
+    console.log(
+      `  ${rank} ${command.padEnd(width)}  ${sizes[index]!.padStart(sizeWidth)}  ${plural(sessions, "session")}`,
+    );
+  });
+  return 0;
+};
+
 /** Runs the binrec CLI with `argv` (without the runtime and script) and exits the process. */
 export const runCli = async (argv: string[]) => {
   const b = binrec.create();
@@ -85,6 +125,8 @@ export const runCli = async (argv: string[]) => {
       await b.disableRecords();
       console.log("Recording is off: shims run the real binary without recording");
       process.exit(0);
+    case "stats":
+      process.exit(await printStats(b));
     case "rec": {
       let records = b.records;
       let config: string | undefined = b.config;
