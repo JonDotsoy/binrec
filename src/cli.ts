@@ -6,6 +6,7 @@ const usage = (b: Binrec) => `Usage:
   binrec install           Create ${b.path} and show how to add it to PATH
   binrec install <bin>     Install a shim for <bin> in ${b.path}
   binrec uninstall <bin>   Remove the shim for <bin> (records are kept)
+  binrec uninstall --all   Remove every shim in ${b.path} (records are kept)
   binrec rec [--records <dir>] <path> [...]
                            Run <path> passing stdio through and record it in ${b.records}`;
 
@@ -36,6 +37,13 @@ const uninstall = async (b: Binrec, command?: string) => {
   if (!command) {
     console.error(usage(b));
     return 1;
+  }
+
+  if (command === "--all") {
+    const removed = await b.uninstallAll();
+    for (const shimPath of removed) console.log(`Uninstalled ${shimPath}`);
+    if (removed.length === 0) console.log(`No shims installed in ${b.path}`);
+    return 0;
   }
 
   const shimPath = await b.uninstall(command);

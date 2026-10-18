@@ -1,6 +1,6 @@
 import { test, expect, beforeAll, afterAll } from "bun:test";
 import { $ } from "bun";
-import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { binrec } from "../index.ts";
@@ -195,5 +195,19 @@ test("b.uninstall removes only binrec shims and keeps the records", async () => 
   const other = join(b.path, "other");
   await Bun.write(other, "#!/usr/bin/env bash\necho hi\n");
   expect(await b.uninstall("other")).toBeNull();
+  expect(await Bun.file(other).exists()).toBe(true);
+});
+
+test("b.uninstallAll removes every binrec shim and nothing else", async () => {
+  const b = binrec.create({ path: join(tmp, "uninstall-all", "bin") });
+  expect(await b.uninstallAll()).toEqual([]);
+
+  const shims = [await b.install("date"), await b.install("true")];
+  const other = join(b.path, "other");
+  await Bun.write(other, "#!/usr/bin/env bash\necho hi\n");
+
+  await mkdir(join(b.path, "folder"));
+
+  expect(await b.uninstallAll()).toEqual(shims.sort());
   expect(await Bun.file(other).exists()).toBe(true);
 });

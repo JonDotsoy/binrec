@@ -1,4 +1,4 @@
-import { mkdir, chmod, rm } from "node:fs/promises";
+import { mkdir, chmod, readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { DISABLED_MARKER, RECORDS_DIR_MODE, rec } from "./rec.ts";
@@ -29,6 +29,8 @@ export type Binrec = {
    * shim was installed for it. Recorded sessions are kept.
    */
   uninstall(command: string): Promise<string | null>;
+  /** Removes every binrec shim in the bin folder and returns their paths. Recorded sessions are kept. */
+  uninstallAll(): Promise<string[]>;
   /** Turns recording off for every shim using this records folder. */
   disableRecords(): Promise<void>;
   /** Turns recording back on. */
@@ -96,10 +98,21 @@ const create = (options: CreateOptions = {}): Binrec => {
   const uninstall = async (command: string) => {
     const shimPath = join(path, basename(command));
     const shim = Bun.file(shimPath);
-    if (!(await shim.exists()) || !isShim(await shim.text())) return null;
+    const content = await shim.text().catch(() => null); // missing file or a folder
+    if (content === null || !isShim(content)) return null;
 
     await rm(shimPath);
     return shimPath;
+  };
+
+  const uninstallAll = async () => {
+    const names = await readdir(path).catch(() => [] as string[]);
+    const removed: string[] = [];
+    for (const name of names.sort()) {
+      const shimPath = await uninstall(name);
+      if (shimPath) removed.push(shimPath);
+    }
+    return removed;
   };
 
   const marker = join(records, DISABLED_MARKER);
@@ -121,6 +134,7 @@ const create = (options: CreateOptions = {}): Binrec => {
     init,
     install,
     uninstall,
+    uninstallAll,
     disableRecords,
     enableRecords,
     isRecording,

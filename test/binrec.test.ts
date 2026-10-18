@@ -83,3 +83,21 @@ test("binrec uninstall fails for a command without a shim", async () => {
   expect(result.exitCode).toBe(1);
   expect(result.stderr.toString()).toContain("no shim installed for date");
 });
+
+test("binrec uninstall --all removes every shim", async () => {
+  const env = { ...process.env, BINREC_HOME: binrecHome };
+  await $`bun ${binrec} install date`.env(env).quiet();
+  await $`bun ${binrec} install true`.env(env).quiet();
+
+  const result = await $`bun ${binrec} uninstall --all`.env(env).nothrow().quiet();
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toBe(
+    `Uninstalled ${join(binDir, "date")}\nUninstalled ${join(binDir, "true")}\n`,
+  );
+  expect(await Bun.file(join(binDir, "date")).exists()).toBe(false);
+  expect(await Bun.file(join(binDir, "true")).exists()).toBe(false);
+
+  const again = await $`bun ${binrec} uninstall --all`.env(env).nothrow().quiet();
+  expect(again.exitCode).toBe(0);
+  expect(again.stdout.toString()).toBe(`No shims installed in ${binDir}\n`);
+});

@@ -49,6 +49,7 @@ binrec rec --records ./records /usr/bin/date +%F
 | `binrec install` | Creates the shim folder and prints the `PATH` line for `~/.bashrc`. |
 | `binrec install <bin>` | Installs a shim for `<bin>`. |
 | `binrec uninstall <bin>` | Removes the shim for `<bin>`. Its recorded sessions are kept. |
+| `binrec uninstall --all` | Removes every shim in the shim folder. Recorded sessions are kept. |
 | `binrec rec [--records <dir>] <path> [args…]` | Runs `<path>`, passes stdio through, records the session and exits with its exit code. |
 | `binrec --version` (`-v`) | Prints the binrec version. |
 
@@ -96,6 +97,7 @@ session?.lines;    // every ndjson line of the session
 | `b.init()` | Creates the shim folder. |
 | `b.install(command)` | Installs a shim for `command` and returns its path. Throws if the command is not found. |
 | `b.uninstall(command)` | Removes the shim for `command` and returns its path, or `null` if there was none. Only removes files binrec wrote; records are kept. |
+| `b.uninstallAll()` | Removes every binrec shim in the shim folder and returns their paths. Other files are left alone. |
 | `b.sessions(command)` | Every recorded session of `command`, oldest first. `command` can be a name (`date`) or an absolute path. |
 | `b.lastSession(command)` | The most recent session of `command`, or `null`. |
 | `b.disableRecords()` / `b.enableRecords()` | Turns recording off or on for every shim that uses this records folder. Shims keep working while recording is off. |
