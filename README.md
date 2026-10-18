@@ -64,7 +64,7 @@ binrec rec --records ./records /usr/bin/date +%F
 | `binrec on <bin>` / `binrec off <bin>` | Same as `binrec install <bin>` / `binrec uninstall <bin>` (`off --all` works too, and so do `enable <bin>` / `disable <bin>`). |
 | `binrec stats` | Shows how many sessions were recorded, how many bytes they consumed in total, and a ranking of the commands that consumed the most. |
 | `binrec list [<bin>]` | Lists the recorded sessions, oldest first, with their id, start time, exit code, size and command line. With `<bin>`, only the sessions of that binary. |
-| `binrec play [--timestamps] [--no-wait \| --speed <n>] <id>` | Plays session `<id>` back: writes its `stdout` and `stderr` again, each chunk as long after the start as it was recorded. The start of an id is enough when it matches only one session. `--timestamps` (`-t`) shows every line with its recorded timestamp, the time since the start and its stream. `--no-wait` (`-n`) writes the whole output at once, to see how the session ended. `--speed 2` plays twice as fast, `--speed 0.5` half as fast, and `--speed 0` is the same as `--no-wait`. |
+| `binrec play [--timestamps] [--no-wait \| --speed <n>] <id>` | Plays session `<id>` back: writes its `stdout` and `stderr` again, each chunk as long after the start as it was recorded. The start of an id is enough when it matches only one session. `--timestamps` (`-t`) shows every line with its recorded timestamp, the time since the start and its stream, `stdin` included. `--no-wait` (`-n`) writes the whole output at once, to see how the session ended. `--speed 2` plays twice as fast, `--speed 0.5` half as fast, and `--speed 0` is the same as `--no-wait`. |
 | `binrec play --ui [--port <n>] [--speed <n>] <id>` | Plays session `<id>` in the browser instead: serves a page on `127.0.0.1` (on a free port, or `--port`), prints its address and runs until Ctrl+C. See [Play in the browser](#play-in-the-browser). |
 | `binrec rec [--records <dir>] [--config <file>] <path> [args…]` | Runs `<path>`, passes stdio through, records the session and exits with its exit code. |
 | `binrec --version` (`-v`) | Prints the binrec version. |
@@ -138,9 +138,42 @@ binrec play --speed 0.5 e531b87f  # half as fast
 binrec play -t -n e531b87f        # every line with its timestamp, without waiting
 ```
 
-`play` keeps each stream on its own: `binrec play <id> 2>/dev/null` shows only what went to `stdout`. It does not write the `stdin` chunks back: on a terminal, what you typed is already in `stdout` as the terminal's echo.
+`play` keeps each stream on its own: `binrec play <id> 2>/dev/null` shows only what went to `stdout`. It does not write the `stdin` chunks back: on a terminal, what you typed is already in `stdout` as the terminal's echo. With `--timestamps`, the `stdin` chunks are listed too, as `stdin` lines on `stdout`, so you can see what the program read.
 
 The animations above are made from a real record with `bun scripts/demo-svg.ts <record.ndjson> docs/play.svg [--timestamps]`.
+
+### Example: both sides of a pipe
+
+With a shim for `echo` and one for `cat`, a pipe records one session per command, so you can see what each one received and what it wrote:
+
+```sh
+binrec install echo
+binrec install cat
+env echo "hola mundo" | cat
+binrec list
+```
+
+`echo` is also a shell builtin, and the shell runs its builtin without looking at `PATH`, so `env echo` is what runs `/usr/bin/echo` through its shim. `cat` goes through its shim as usual. The pipe prints `hola mundo` just as it does without binrec, and `binrec list` shows the two sessions:
+
+![Installing shims for echo and cat, running env echo "hola mundo" | cat and listing the two recorded sessions](docs/pipe.gif)
+
+`binrec play -t` on the `echo` session shows it ran with the argument `hola mundo`, read nothing on `stdin`, wrote `hola mundo` on `stdout` and exited with 0:
+
+![binrec play -t on the echo session](docs/play-echo.gif)
+
+The `cat` session shows it received `hola mundo` from the pipe on `stdin`, wrote the same line on `stdout` and exited with 0:
+
+![binrec play -t on the cat session](docs/play-cat.gif)
+
+```console
+$ binrec play -t f0a9f6f1
+2026-10-18T21:25:44.131Z    +0.000s  $       /usr/bin/cat
+2026-10-18T21:25:44.141Z    +0.010s  stdin   hola mundo
+2026-10-18T21:25:44.142Z    +0.011s  stdout  hola mundo
+2026-10-18T21:25:44.145Z    +0.014s  exit    0
+```
+
+These are real recordings, played back in a real terminal.
 
 ### Play in the browser
 

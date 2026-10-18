@@ -84,8 +84,8 @@ stderr again, each chunk as long after the start as it was recorded.
 The start of an id is enough when it matches only one session.
 
   --timestamps, -t  Show every line with its recorded timestamp, the time since
-                    the session started and its stream (stdout or stderr), the
-                    command line first and the exit code last
+                    the session started and its stream (stdin, stdout or
+                    stderr), the command line first and the exit code last
   --no-wait, -n     Write the whole output at once, without the recorded
                     waits, to see how the session ended (same as --speed 0)
   --speed <n>       Play <n> times faster (default: 1): 2 is twice as fast,

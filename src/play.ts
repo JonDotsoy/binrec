@@ -17,8 +17,9 @@ export type PlayOptions = {
   speed?: number;
   /**
    * Prefix every line with when it was written: the recorded `timestamp`, the
-   * time since the session started and the stream (`stdout` or `stderr`). The
-   * session's command line goes first and its exit code last, on `stdout`.
+   * time since the session started and the stream (`stdin`, `stdout` or
+   * `stderr`). What the program read (`stdin`) is listed on `stdout`, and so are
+   * the session's command line, first, and its exit code, last.
    */
   timestamps?: boolean;
 };
@@ -50,7 +51,8 @@ const writeTo = (stream: PlayStream, bytes: Uint8Array) =>
  * Plays a recorded session back: writes its `stdout` and `stderr` chunks again,
  * each one as long after the start as it was recorded (`performance`). `stdin`
  * chunks are not written, since what the program echoed is already in `stdout`.
- * With `timestamps`, every line also shows when and on which stream it was written.
+ * With `timestamps`, every line also shows when and on which stream it was written,
+ * and the `stdin` chunks are listed too, as lines on `stdout`.
  */
 export const play = async (session: Session, options: PlayOptions = {}) => {
   const stdout = options.stdout ?? process.stdout;
@@ -70,7 +72,9 @@ export const play = async (session: Session, options: PlayOptions = {}) => {
   }
 
   for (const line of session.lines) {
-    if (line.type !== "stdout" && line.type !== "stderr" && line.type !== "end") continue;
+    if (line.type !== "stdout" && line.type !== "stderr" && line.type !== "end") {
+      if (line.type !== "stdin" || !options.timestamps) continue;
+    }
     if (realtime) {
       const wait = (line.performance - startedAt) / speed - (performance.now() - playStart);
       if (wait > 0) await Bun.sleep(wait);
@@ -83,7 +87,7 @@ export const play = async (session: Session, options: PlayOptions = {}) => {
     }
     const bytes = chunkBytes(line);
     await writeTo(
-      line.type === "stdout" ? stdout : stderr,
+      line.type === "stderr" ? stderr : stdout,
       options.timestamps ? labelLines(label(line, line.type), bytes) : bytes,
     );
   }
