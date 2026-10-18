@@ -1,6 +1,9 @@
 {
   "name": "@jondotsoy/binrec",
   "version": "0.0.2",
+  "description": "Record everything a command reads and writes",
+  "license": "MIT",
+  "author": "Jonathan Delgado <hi@jon.soy> (https://jon.soy)",
   "module": "index.ts",
   "exports": {
     ".": "./index.ts"

@@ -85,6 +85,7 @@ jobs:
             url "https://github.com/JonDotsoy/binrec/releases/download/v${VERSION}/binrec.js"
             version "${VERSION}"
             sha256 "${SHA256}"
+            license "MIT"
 
             depends_on "oven-sh/bun/bun"
 

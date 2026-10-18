@@ -115,3 +115,7 @@ bun run build   # writes dist/binrec.js and dist/package.json
 `dist/binrec.js` is both the library and the `binrec` bin. Only `dist/` is published; the root `package.json` is private.
 
 Releases run from the **publish** GitHub Actions workflow (`workflow_dispatch`, with a `patch`, `minor` or `major` bump). It runs the tests, builds, publishes `dist/` to npm with trusted publishing (OIDC), tags the version and creates a GitHub release.
+
+## License
+
+[MIT](LICENSE) © [Jonathan Delgado](https://jon.soy) <hi@jon.soy>

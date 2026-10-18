@@ -26,7 +26,9 @@ if (!result.success) {
 await chmod(join(outdir, "binrec.js"), 0o755);
 
 // npm shows the README of the published folder on the package page.
-await Bun.write(join(outdir, "README.md"), Bun.file(join(root, "README.md")));
+for (const file of ["README.md", "LICENSE"]) {
+  await Bun.write(join(outdir, file), Bun.file(join(root, file)));
+}
 
 await Bun.write(
   join(outdir, "package.json"),
@@ -34,6 +36,9 @@ await Bun.write(
     {
       name: pkg.name,
       version: pkg.version,
+      description: pkg.description,
+      license: pkg.license,
+      author: pkg.author,
       type: "module",
       module: "binrec.js",
       exports: { ".": "./binrec.js" },
@@ -48,4 +53,4 @@ await Bun.write(
   )}\n`,
 );
 
-console.log(`Built ${join("dist", "binrec.js")}, ${join("dist", "package.json")} and ${join("dist", "README.md")}`);
+console.log(`Built ${join("dist", "binrec.js")}, ${join("dist", "package.json")}, README.md and LICENSE`);

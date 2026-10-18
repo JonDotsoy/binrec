@@ -19,10 +19,12 @@ afterAll(async () => {
   await rm(binrecHome, { recursive: true, force: true });
 });
 
-test("build writes dist/binrec.js, dist/package.json and dist/README.md", async () => {
+test("build writes dist/binrec.js, dist/package.json, README.md and LICENSE", async () => {
   const pkg = await Bun.file(join(dist, "package.json")).json();
   expect(pkg).toMatchObject({
     name: "@jondotsoy/binrec",
+    license: "MIT",
+    author: "Jonathan Delgado <hi@jon.soy> (https://jon.soy)",
     version: (await Bun.file(join(root, "package.json")).json()).version,
     publishConfig: { registry: "https://registry.npmjs.org/", access: "public" },
     exports: { ".": "./binrec.js" },
@@ -30,9 +32,9 @@ test("build writes dist/binrec.js, dist/package.json and dist/README.md", async 
   });
   expect(pkg.private).toBeUndefined();
   expect((await Bun.file(cli).text()).startsWith("#!/usr/bin/env bun\n")).toBe(true);
-  expect(await Bun.file(join(dist, "README.md")).text()).toBe(
-    await Bun.file(join(root, "README.md")).text(),
-  );
+  for (const file of ["README.md", "LICENSE"]) {
+    expect(await Bun.file(join(dist, file)).text()).toBe(await Bun.file(join(root, file)).text());
+  }
 });
 
 test("dist/binrec.js works as the binrec bin", async () => {
