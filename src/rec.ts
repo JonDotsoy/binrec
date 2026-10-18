@@ -2,11 +2,24 @@ import { mkdir, open } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 
 export type RecOptions = {
-  /**
-   * Folder where the `<sessionId>.ndjson` record is written, or `false` to run
-   * without recording. Recording is also skipped while `<records>/.disabled` exists.
-   */
+  /** Folder where the `<sessionId>.ndjson` record is written, or `false` to run without recording. */
   records: string | false;
+  /** binrec's `config.json`. Recording is skipped while it has `"recording": false`. */
+  config?: string;
+};
+
+export type Config = {
+  /** `false` turns recording off for every shim; shims keep running the real binary. */
+  recording?: boolean;
+};
+
+/** Reads a binrec `config.json`; a missing or unreadable file means the defaults. */
+export const readConfig = async (path: string): Promise<Config> => {
+  try {
+    return await Bun.file(path).json();
+  } catch {
+    return {};
+  }
 };
 
 export type RecResult = {
@@ -17,7 +30,7 @@ export type RecResult = {
   recordPath: string | null;
 };
 
-/** Name of the marker file that turns recording off for a records folder. */
+/** Marker file older binrec versions used to turn recording off; still honored. */
 export const DISABLED_MARKER = ".disabled";
 
 /** Permissions of a records folder binrec creates: only its owner can list or enter it. */
@@ -167,7 +180,11 @@ export const rec = async (
   const command = isAbsolute(target) ? target : (Bun.which(target) ?? resolve(target));
 
   const records = options.records === false ? null : resolve(options.records);
-  if (!records || (await Bun.file(join(records, DISABLED_MARKER)).exists())) {
+  const recordingOff =
+    !records ||
+    (options.config !== undefined && (await readConfig(options.config)).recording === false) ||
+    (await Bun.file(join(records, DISABLED_MARKER)).exists());
+  if (recordingOff) {
     const child = Bun.spawn([command, ...args], {
       stdin: "inherit",
       stdout: "inherit",

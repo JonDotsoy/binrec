@@ -228,3 +228,20 @@ test("b.on(command) and b.off(command) install and uninstall", async () => {
   expect(await Bun.file(join(b.path, "date")).exists()).toBe(false);
   expect(await b.isRecording()).toBe(true);
 });
+
+test("recording settings live in config.json and the old .disabled marker is still honored", async () => {
+  const b = binrec.create({ path: join(tmp, "config", "bin") });
+  expect(b.config).toBe(join(tmp, "config", "config.json"));
+
+  await b.off();
+  expect(await Bun.file(b.config).json()).toEqual({ recording: false });
+  await b.on();
+  expect(await Bun.file(b.config).json()).toEqual({ recording: true });
+
+  await mkdir(b.records, { recursive: true });
+  await Bun.write(join(b.records, ".disabled"), "");
+  expect(await b.isRecording()).toBe(false);
+  await b.enableRecords();
+  expect(await b.isRecording()).toBe(true);
+  expect(await Bun.file(join(b.records, ".disabled")).exists()).toBe(false);
+});

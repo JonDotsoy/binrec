@@ -11,7 +11,7 @@ const usage = (b: Binrec) => `Usage:
   binrec off               Turn recording off, shims still run (also: binrec disable)
   binrec on <bin>          Same as binrec install <bin>
   binrec off <bin>         Same as binrec uninstall <bin>
-  binrec rec [--records <dir>] <path> [...]
+  binrec rec [--records <dir>] [--config <file>] <path> [...]
                            Run <path> passing stdio through and record it in ${b.records}`;
 
 const install = async (b: Binrec, command?: string) => {
@@ -87,15 +87,17 @@ export const runCli = async (argv: string[]) => {
       process.exit(0);
     case "rec": {
       let records = b.records;
-      if (rest[0] === "--records") {
-        records = rest[1] ?? records;
-        rest.splice(0, 2);
+      let config: string | undefined = b.config;
+      while (rest[0] === "--records" || rest[0] === "--config") {
+        const [flag, value] = rest.splice(0, 2);
+        if (flag === "--records") records = value ?? records;
+        else config = value;
       }
       if (!rest[0]) {
         console.error(usage(b));
         process.exit(1);
       }
-      const { exitCode } = await binrec.rec(rest[0], rest.slice(1), { records });
+      const { exitCode } = await binrec.rec(rest[0], rest.slice(1), { records, config });
       process.exit(exitCode);
     }
     default:
