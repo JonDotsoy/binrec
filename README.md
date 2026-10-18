@@ -66,6 +66,7 @@ Each session is one ndjson file:
 - The first line (`command`) has the session id, the absolute path of the binary and its arguments.
 - Each `stdin`, `stdout` and `stderr` line holds one chunk as text in `data`.
 - If a chunk is not valid UTF-8 on its own, `data` is `null` and the raw bytes are in `data_base64`, so nothing is lost.
+- On a terminal, `resize` lines hold the window size (`cols`, `rows`): one at the start and one each time the window changes.
 - The last line (`end`) has the exit code.
 - `timestamp` is wall-clock time (ISO 8601) and `performance` is `performance.now()` in the recording process.
 
@@ -102,7 +103,8 @@ Each session has `sessionId`, `command`, `args`, `timestamp`, `exitCode` (`null`
 
 ## Notes
 
-- To record, binrec connects the program to pipes instead of your terminal, so programs that check for a TTY (colors, pagers) behave as if their output were redirected. While recording is off, the program runs attached to the terminal.
+- When you run it on a terminal, binrec gives the program its own pseudo terminal, so interactive programs such as `vim`, `less` or `docker exec -it` work while they are recorded. Every key you type is recorded as `stdin` and everything the program draws as `stdout` (a terminal mixes stdout and stderr, so there are no `stderr` lines in that case).
+- When stdin or stdout is not a terminal (pipes, redirects, CI), binrec uses pipes and keeps stdout and stderr apart.
 - Shims are bash scripts and point at the Bun runtime and the binrec script that installed them.
 
 ## Development

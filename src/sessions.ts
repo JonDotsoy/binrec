@@ -19,6 +19,14 @@ export type RecordLine =
       /** The chunk's bytes in base64, present only when `data` is `null`. */
       data_base64?: string;
     }
+  | {
+      /** Window size of the terminal, only in sessions recorded on a terminal. */
+      type: "resize";
+      timestamp: string;
+      performance: number;
+      cols: number;
+      rows: number;
+    }
   | { type: "end"; timestamp: string; performance: number; exitCode: number };
 
 export type Session = {
