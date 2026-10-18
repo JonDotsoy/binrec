@@ -8,6 +8,8 @@ Record everything a command reads and writes.
 
 Requires [Bun](https://bun.sh).
 
+New to binrec? [Concepts](docs/concepts.md) explains shims, sessions, nested sessions, how binrec works with your terminal, its environment variables, and how to install and uninstall shims and binrec itself.
+
 ## Install
 
 ```sh
