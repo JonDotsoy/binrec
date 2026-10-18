@@ -99,7 +99,32 @@ test("binrec list --help and binrec play --help show the command's help", async 
 
     const play = await $`bun ${binrec} play ${flag}`.env(env).nothrow().quiet();
     expect(play.exitCode).toBe(0);
-    expect(play.stdout.toString()).toStartWith("Usage: binrec play [--speed <n>] <id>\n");
+    expect(play.stdout.toString()).toStartWith("Usage: binrec play [--timestamps] [--speed <n>] <id>\n");
     expect(play.stdout.toString()).toContain("--speed <n>");
   }
+});
+
+test("binrec play --timestamps shows every line with its timestamp, elapsed time and stream", async () => {
+  const sh = Bun.which("sh")!;
+  const sessionId = await record(sh, "-c", "echo uno; sleep 0.3; echo dos >&2; printf 'a\\nb'; exit 2");
+  const { lines } = (await b.session(sessionId))!;
+
+  const started = performance.now();
+  const result = await $`bun ${binrec} play -t ${sessionId}`.env(env).nothrow().quiet();
+  expect(performance.now() - started).toBeGreaterThanOrEqual(300);
+  expect(result.exitCode).toBe(0);
+
+  const at = (type: string) => lines.find((line) => line.type === type)!.timestamp;
+  const row = (timestamp: string, stream: string, text: string) =>
+    new RegExp(`^${timestamp.replaceAll(".", "\\.")} +\\+\\d+\\.\\d{3}s  ${stream} +${text}$`);
+  const out = result.stdout.toString().trimEnd().split("\n");
+  expect(out).toHaveLength(5);
+  expect(out[0]).toMatch(row(at("command"), "\\$", `${sh} -c .*`));
+  expect(out[0]).toContain("+0.000s");
+  expect(out[1]).toMatch(row(at("stdout"), "stdout", "uno"));
+  expect(out[2]).toMatch(/  stdout  a$/);
+  expect(out[3]).toMatch(/  stdout  b$/);
+  expect(out[4]).toMatch(row(at("end"), "exit", "2"));
+  expect(Number(out[4]!.match(/\+(\d+\.\d+)s/)![1])).toBeGreaterThanOrEqual(0.3);
+  expect(result.stderr.toString()).toMatch(row(at("stderr"), "stderr", "dos\n"));
 });
