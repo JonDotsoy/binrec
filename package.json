@@ -1,6 +1,6 @@
 {
   "name": "@jondotsoy/binrec",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Record everything a command reads and writes",
   "license": "MIT",
   "author": {
