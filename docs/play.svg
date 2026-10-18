@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="166" viewBox="0 0 560 166" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="14">
+<style>
+@keyframes l1{0%,14.36%{opacity:0}14.37%,100%{opacity:1}}
+.l1{animation:l1 5.60s steps(1,end) infinite}
+@keyframes l2{0%,35.73%{opacity:0}35.74%,100%{opacity:1}}
+.l2{animation:l2 5.60s steps(1,end) infinite}
+@keyframes l3{0%,50.04%{opacity:0}50.05%,100%{opacity:1}}
+.l3{animation:l3 5.60s steps(1,end) infinite}
+@keyframes l4{0%,55.39%{opacity:0}55.40%,100%{opacity:1}}
+.l4{animation:l4 5.60s steps(1,end) infinite}
+</style>
+<rect width="100%" height="100%" rx="8" fill="#0d1117"/>
+<circle cx="20" cy="18" r="6" fill="#ff5f57"/><circle cx="40" cy="18" r="6" fill="#febc2e"/><circle cx="60" cy="18" r="6" fill="#28c840"/>
+<text x="280" y="22" fill="#8b949e" font-size="12" text-anchor="middle">play</text>
+<text class="l0" x="20" y="56" fill="#e6edf3" xml:space="preserve">$ binrec play e531b87f</text>
+<text class="l1" x="20" y="76" fill="#e6edf3" xml:space="preserve">building...</text>
+<text class="l2" x="20" y="96" fill="#ff7b72" xml:space="preserve">warning: unused variable</text>
+<text class="l3" x="20" y="116" fill="#e6edf3" xml:space="preserve">done in 2.0s</text>
+<text class="l4" x="20" y="136" fill="#e6edf3" xml:space="preserve">$</text>
+</svg>

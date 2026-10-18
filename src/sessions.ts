@@ -140,3 +140,29 @@ export const sessions = async (records: string, command?: string): Promise<Sessi
 /** Returns the most recent recorded session of `command`, or `null` if there is none. */
 export const lastSession = async (records: string, command: string) =>
   (await sessions(records, command)).at(-1) ?? null;
+
+/**
+ * Finds the recorded session whose id is `id` or starts with `id` (like a short
+ * git hash). Returns `null` when none matches and throws when more than one does.
+ */
+export const findSession = async (records: string, id: string): Promise<Session | null> => {
+  if (!id || id.includes("/") || id.includes("\\")) return null;
+
+  const exact = await readSession(join(records, `${id}.ndjson`)).catch(() => null); // missing record
+  if (exact) return exact;
+
+  let files: string[];
+  try {
+    files = (await readdir(records)).filter(
+      (file) => file.endsWith(".ndjson") && file.startsWith(id),
+    );
+  } catch {
+    return null;
+  }
+  if (files.length > 1) {
+    const ids = files.map((file) => file.replace(/\.ndjson$/, "")).sort();
+    throw new Error(`binrec: session id ${id} is ambiguous: ${ids.join(", ")}`);
+  }
+  if (files.length === 0) return null;
+  return readSession(join(records, files[0]!)).catch(() => null); // unreadable record
+};

@@ -1,8 +1,9 @@
 import { runCli } from "./src/cli.ts";
 
-export { binrec, rec, defaultPath } from "./src/binrec.ts";
+export { binrec, rec, play, defaultPath } from "./src/binrec.ts";
 export type {
   Binrec,
+  PlayOptions,
   CommandStats,
   CreateOptions,
   RecOptions,

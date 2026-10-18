@@ -2,6 +2,8 @@ import { version } from "../package.json";
 import { binrec, type Binrec } from "./binrec.ts";
 
 const usage = (b: Binrec) => `Usage:
+  binrec --help            Show this help (also: -h); binrec <command> --help
+                           shows the help of one command
   binrec --version         Print the binrec version
   binrec install           Create ${b.path} and show how to add it to PATH
   binrec install <bin>     Install a shim for <bin> in ${b.path}
@@ -13,8 +15,80 @@ const usage = (b: Binrec) => `Usage:
   binrec off <bin>         Same as binrec uninstall <bin>
   binrec stats             Show how many bytes the recorded sessions consumed and
                            rank the commands that consumed the most
+  binrec list [<bin>]      List the recorded sessions (of <bin> only, if given) with
+                           their id, oldest first
+  binrec play [--timestamps] [--no-wait | --speed <n>] <id>
+                           Play the session <id> back, writing its output with the
+                           recorded timing (<n> times faster); --no-wait writes it
+                           at once and --timestamps shows when each line was written
   binrec rec [--records <dir>] [--config <file>] <path> [...]
                            Run <path> passing stdio through and record it in ${b.records}`;
+
+/** Help of each command, shown by `binrec <command> --help`. */
+const commandHelp: Record<string, (b: Binrec) => string> = {
+  install: (b) => `Usage: binrec install [<bin>]
+
+Without <bin>, create ${b.path} and show the line that adds it to PATH.
+With <bin>, resolve the real path of <bin> and install a shim for it in
+${b.path} that runs it through binrec rec, so every call is recorded in
+${b.records}.`,
+  uninstall: (b) => `Usage: binrec uninstall <bin>
+       binrec uninstall --all
+
+Remove the shim for <bin>, or every shim with --all, from ${b.path}.
+Recorded sessions are kept.`,
+  on: (b) => `Usage: binrec on [<bin>]
+
+Without <bin>, turn recording on: shims save their sessions in ${b.records}.
+With <bin>, same as binrec install <bin>. Also: binrec enable`,
+  off: () => `Usage: binrec off [<bin> | --all]
+
+Without <bin>, turn recording off: shims keep running the real binary but
+nothing is recorded. With <bin> or --all, same as binrec uninstall.
+Also: binrec disable`,
+  stats: (b) => `Usage: binrec stats
+
+Show how many sessions are recorded in ${b.records}, how many bytes they
+consumed in total, and rank the commands that consumed the most.`,
+  rec: (b) => `Usage: binrec rec [--records <dir>] [--config <file>] <path> [...]
+
+Run <path> with the given arguments, pass stdin, stdout and stderr through,
+record the session and exit with the program's exit code. Only a lone
+binrec rec --help shows this help; any other --help goes to the program.
+
+  --records <dir>   Folder for the records (default: ${b.records})
+  --config <file>   Settings file to read (default: ${b.config})`,
+  list: (b) => `Usage: binrec list [<bin>]
+
+List the sessions recorded in ${b.records}, oldest first, with their id,
+start time, exit code, size and command line. With <bin> (a name like date
+or an absolute path), list only the sessions of that binary.
+Pass an id to binrec play to play a session back.`,
+  play: (b) => `Usage: binrec play [--timestamps] [--no-wait | --speed <n>] <id>
+
+Play the session <id> from ${b.records} back: write its stdout and
+stderr again, each chunk as long after the start as it was recorded.
+The start of an id is enough when it matches only one session.
+
+  --timestamps, -t  Show every line with its recorded timestamp, the time since
+                    the session started and its stream (stdout or stderr), the
+                    command line first and the exit code last
+  --no-wait, -n     Write the whole output at once, without the recorded
+                    waits, to see how the session ended (same as --speed 0)
+  --speed <n>       Play <n> times faster (default: 1): 2 is twice as fast,
+                    0.5 half as fast and 0 writes everything at once`,
+};
+
+const aliases: Record<string, string> = { enable: "on", disable: "off" };
+
+const isHelpFlag = (arg?: string) => arg === "--help" || arg === "-h";
+
+/**
+ * True when `binrec <command> <...rest>` asks for the command's help. `rec`
+ * passes its arguments on to the program, so only a lone `--help` counts there.
+ */
+const wantsHelp = (command: string, rest: string[]) =>
+  isHelpFlag(rest[0]) && (command !== "rec" || rest.length === 1);
 
 const install = async (b: Binrec, command?: string) => {
   if (!command) {
@@ -99,12 +173,94 @@ const printStats = async (b: Binrec) => {
   return 0;
 };
 
+/** Shows an argument like a shell would need it, quoting it only when it has to. */
+const showArg = (arg: string) => (/^[\w@%+=:,./-]+$/.test(arg) ? arg : `'${arg.replaceAll("'", `'\\''`)}'`);
+
+const printList = async (b: Binrec, command?: string) => {
+  const found = await b.sessions(command);
+  if (found.length === 0) {
+    console.log(`No recorded sessions${command ? ` of ${command}` : ""} in ${b.records}`);
+    return 0;
+  }
+
+  const rows = found.map((session) => [
+    session.sessionId,
+    session.timestamp.replace(/\.\d+Z$/, "Z"),
+    session.exitCode === null ? "-" : String(session.exitCode),
+    formatBytes(session.total),
+    [session.command, ...session.args].map(showArg).join(" "),
+  ]);
+  const header = ["ID", "STARTED", "EXIT", "SIZE", "COMMAND"];
+  const widths = header.map((title, column) =>
+    Math.max(title.length, ...rows.map((row) => row[column]!.length)),
+  );
+  for (const row of [header, ...rows]) {
+    const cells = row.map((cell, column) =>
+      column === row.length - 1
+        ? cell
+        : column === 2 || column === 3
+          ? cell.padStart(widths[column]!)
+          : cell.padEnd(widths[column]!),
+    );
+    console.log(cells.join("  "));
+  }
+  return 0;
+};
+
+const playSession = async (b: Binrec, args: string[]) => {
+  let speed = 1;
+  let timestamps = false;
+  const flags = ["--speed", "--timestamps", "-t", "--no-wait", "-n"];
+  while (flags.includes(args[0]!)) {
+    if (args[0] === "--no-wait" || args[0] === "-n") {
+      speed = 0;
+      args = args.slice(1);
+      continue;
+    }
+    if (args[0] !== "--speed") {
+      timestamps = true;
+      args = args.slice(1);
+      continue;
+    }
+    speed = Number(args[1]);
+    args = args.slice(2);
+    if (!Number.isFinite(speed) || speed < 0) {
+      console.error("binrec: --speed must be a number, 0 or more");
+      return 1;
+    }
+  }
+  const id = args[0];
+  if (!id) {
+    console.error(usage(b));
+    return 1;
+  }
+
+  try {
+    await b.play(id, { speed, timestamps });
+    return 0;
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    return 1;
+  }
+};
+
 /** Runs the binrec CLI with `argv` (without the runtime and script) and exits the process. */
 export const runCli = async (argv: string[]) => {
   const b = binrec.create();
   const [command, ...rest] = argv;
 
+  // `binrec <command> --help` shows that command's help instead of running it.
+  const helpOf = command && commandHelp[aliases[command] ?? command];
+  if (helpOf && wantsHelp(command, rest)) {
+    console.log(helpOf(b));
+    process.exit(0);
+  }
+
   switch (command) {
+    case "--help":
+    case "-h":
+      console.log(usage(b));
+      process.exit(0);
     case "--version":
     case "-v":
       console.log(version);
@@ -127,6 +283,10 @@ export const runCli = async (argv: string[]) => {
       process.exit(0);
     case "stats":
       process.exit(await printStats(b));
+    case "list":
+      process.exit(await printList(b, rest[0]));
+    case "play":
+      process.exit(await playSession(b, rest));
     case "rec": {
       let records = b.records;
       let config: string | undefined = b.config;

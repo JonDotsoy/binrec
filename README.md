@@ -53,8 +53,11 @@ binrec rec --records ./records /usr/bin/date +%F
 | `binrec on` / `binrec off` | Turns recording on or off for every shim without removing them (aliases: `enable` / `disable`). Shims keep working while recording is off. |
 | `binrec on <bin>` / `binrec off <bin>` | Same as `binrec install <bin>` / `binrec uninstall <bin>` (`off --all` works too). |
 | `binrec stats` | Shows how many sessions were recorded, how many bytes they consumed in total, and a ranking of the commands that consumed the most. |
+| `binrec list [<bin>]` | Lists the recorded sessions, oldest first, with their id, start time, exit code, size and command line. With `<bin>`, only the sessions of that binary. |
+| `binrec play [--timestamps] [--no-wait \| --speed <n>] <id>` | Plays session `<id>` back: writes its `stdout` and `stderr` again, each chunk as long after the start as it was recorded. The start of an id is enough when it matches only one session. `--timestamps` (`-t`) shows every line with its recorded timestamp, the time since the start and its stream. `--no-wait` (`-n`) writes the whole output at once, to see how the session ended. `--speed 2` plays twice as fast, `--speed 0.5` half as fast, and `--speed 0` is the same as `--no-wait`. |
 | `binrec rec [--records <dir>] [--config <file>] <path> [args…]` | Runs `<path>`, passes stdio through, records the session and exits with its exit code. |
 | `binrec --version` (`-v`) | Prints the binrec version. |
+| `binrec --help` (`-h`) | Prints every command. `binrec <command> --help` (or `-h`) prints the help of one command without running it. For `rec`, only a lone `binrec rec --help` does; with more arguments, `--help` goes to the recorded program. |
 
 Every session writes its size to its own `~/.binrec/records/<sessionId>.stats.json`, and `binrec stats` adds up those small files instead of reading every record:
 
@@ -84,6 +87,46 @@ Settings are saved in `~/.binrec/config.json`. For now it holds one setting, wri
 | `records/` | One `<sessionId>.ndjson` file per recorded session, and its `<sessionId>.stats.json`. |
 | `records/<sessionId>.stats.json` | `{ sessionId, command, total }` of one finished session, written when it ends. `binrec stats` writes it for older records that do not have one; a stats file whose record was deleted is not counted. |
 | `config.json` | binrec's settings. A missing file means the defaults (recording on). |
+
+### Playing a session back
+
+`binrec list` shows the id of every recorded session; `binrec play` takes one of them, or just its start:
+
+```console
+$ binrec list
+ID                                    STARTED               EXIT  SIZE  COMMAND
+e531b87f-3f0c-4b7e-9a51-2c8d0f6a4e21  2026-10-18T16:31:43Z     0  50 B  /usr/bin/sh -c 'echo "building..."; sleep 1.2; echo "warning: unused variable" >&2; sleep 0.8; echo "done in 2.0s"'
+```
+
+`binrec play <id>` writes the session's `stdout` and `stderr` again with the recorded timing, so it looks just like the original run (stderr in red here):
+
+![binrec play replaying a session with its recorded timing](docs/play.svg)
+
+`--timestamps` (`-t`) shows when each line was written: its recorded timestamp, the time since the session started and its stream, with the command line first and the exit code last:
+
+![binrec play -t showing the timestamp, elapsed time and stream of every line](docs/play-timestamps.svg)
+
+```console
+$ binrec play -t e531b87f
+2026-10-18T16:31:43.597Z    +0.000s  $       /usr/bin/sh -c 'echo "building..."; sleep 1.2; echo "warning: unused variable" >&2; sleep 0.8; echo "done in 2.0s"'
+2026-10-18T16:31:43.602Z    +0.005s  stdout  building...
+2026-10-18T16:31:44.800Z    +1.202s  stderr  warning: unused variable
+2026-10-18T16:31:45.602Z    +2.004s  stdout  done in 2.0s
+2026-10-18T16:31:45.603Z    +2.004s  exit    0
+```
+
+To skip the waits or change the pace:
+
+```sh
+binrec play --no-wait e531b87f    # the whole output at once, to see how the session ended (also: -n)
+binrec play --speed 4 e531b87f    # four times faster
+binrec play --speed 0.5 e531b87f  # half as fast
+binrec play -t -n e531b87f        # every line with its timestamp, without waiting
+```
+
+`play` keeps each stream on its own: `binrec play <id> 2>/dev/null` shows only what went to `stdout`. It does not write the `stdin` chunks back: on a terminal, what you typed is already in `stdout` as the terminal's echo.
+
+The animations above are made from a real record with `bun scripts/demo-svg.ts <record.ndjson> docs/play.svg [--timestamps]`.
 
 ## Record format
 
@@ -129,7 +172,9 @@ session?.lines;    // every ndjson line of the session
 | `b.install(command)` | Installs a shim for `command` and returns its path. Throws if the command is not found. |
 | `b.uninstall(command)` | Removes the shim for `command` and returns its path, or `null` if there was none. Only removes files binrec wrote; records are kept. |
 | `b.uninstallAll()` | Removes every binrec shim in the shim folder and returns their paths. Other files are left alone. |
-| `b.sessions(command)` | Every recorded session of `command`, oldest first. `command` can be a name (`date`) or an absolute path. |
+| `b.sessions(command?)` | Every recorded session of `command`, or of every command when it is left out, oldest first. `command` can be a name (`date`) or an absolute path. |
+| `b.session(id)` | The session whose id is `id` or starts with `id`, or `null`. Throws when the start matches more than one session. |
+| `b.play(id, { speed?, timestamps?, stdout?, stderr? })` | Writes the `stdout` and `stderr` of session `id` again with the recorded timing, like `binrec play`. Throws if there is no such session. |
 | `b.lastSession(command)` | The most recent session of `command`, or `null`. |
 | `b.stats()` | `{ sessions, total, commands }` from the sessions' stats files: the number of sessions, the bytes they consumed, and one `{ command, sessions, total }` per binary, the one that consumed the most first. A record without a stats file is read instead; records without `size` or `total` (older or unfinished ones) are counted from their data. |
 | `b.disableRecords()` / `b.enableRecords()` | Turns recording off or on in `config.json`, for every shim installed by this instance. Shims keep working while recording is off. |
@@ -137,6 +182,7 @@ session?.lines;    // every ndjson line of the session
 | `b.on(command)` / `b.off(command)` | Aliases of `b.install(command)` / `b.uninstall(command)`. |
 | `b.isRecording()` | `true` unless recording was turned off. |
 | `binrec.rec(path, args, { records })` | Runs and records one command, like `binrec rec`. Pass `records: false` to run without recording. |
+| `play(session, { speed?, timestamps?, stdout?, stderr? })` | Plays a `Session` you already read back to `stdout` and `stderr` (default `process.stdout` and `process.stderr`). |
 
 Each session has `sessionId`, `command`, `args`, `timestamp`, `exitCode` (`null` if it has not ended), `total` (bytes consumed), `recordPath` and `lines`.
 
