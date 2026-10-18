@@ -69,13 +69,58 @@ const chunkLine = (type: "stdin" | "stdout" | "stderr", chunk: Uint8Array) => ({
 
 type Write = (line: Record<string, unknown>) => void;
 
+/** Called right after the program starts, before any of its output is recorded. */
+type Started = (pid: number) => void;
+
+/**
+ * Signals binrec passes on to the program, so stopping binrec (`kill`, a closed
+ * terminal) stops the program too instead of leaving it running without binrec.
+ */
+const FORWARDED_SIGNALS = ["SIGTERM", "SIGHUP"] as const;
+
+/**
+ * Signals a terminal sends to its whole foreground process group (Ctrl-C, Ctrl-\).
+ * With pipes the program already gets them from the terminal, so binrec only
+ * keeps running to record the end; on a pseudo terminal it passes them on.
+ */
+const TERMINAL_SIGNALS = ["SIGINT", "SIGQUIT"] as const;
+
+/**
+ * Passes `signals` on to `child` while it runs and records each one as a
+ * `signal` line. Returns a function that removes the handlers.
+ */
+const forwardSignals = (
+  child: { kill(signal: NodeJS.Signals): void },
+  write: Write,
+  { terminal }: { terminal: boolean },
+) => {
+  const handlers = new Map<NodeJS.Signals, () => void>();
+  for (const signal of [...FORWARDED_SIGNALS, ...TERMINAL_SIGNALS]) {
+    const forward = terminal || (FORWARDED_SIGNALS as readonly string[]).includes(signal);
+    const handler = () => {
+      write({ type: "signal", ...stamp(), signal });
+      if (forward) child.kill(signal);
+    };
+    handlers.set(signal, handler);
+    process.on(signal, handler);
+  }
+  return () => {
+    for (const [signal, handler] of handlers) process.off(signal, handler);
+  };
+};
+
 /**
  * Runs the command attached to a pseudo terminal, so interactive programs (vim,
  * `docker exec -it`, pagers) see a real TTY. The terminal merges stdout and
  * stderr, so everything the program prints is recorded as `stdout`. Window size
  * changes are forwarded to the program and recorded as `resize` lines.
  */
-const recInTerminal = async (command: string, args: string[], write: Write) => {
+const recInTerminal = async (
+  command: string,
+  args: string[],
+  write: Write,
+  started: Started,
+) => {
   const stdin = process.stdin;
   const stdout = process.stdout;
   const size = () => ({ cols: stdout.columns || 80, rows: stdout.rows || 24 });
@@ -95,7 +140,6 @@ const recInTerminal = async (command: string, args: string[], write: Write) => {
     },
   });
 
-  write({ type: "resize", ...stamp(), ...size() });
   const onResize = () => {
     const { cols, rows } = size();
     terminal.resize(cols, rows);
@@ -109,17 +153,22 @@ const recInTerminal = async (command: string, args: string[], write: Write) => {
   // Raw mode hands every key (Ctrl-C, arrows, Esc) to the program instead of
   // letting the outer terminal act on it.
   stdin.setRawMode(true);
-  stdin.on("data", onInput);
-  stdin.resume();
-  stdout.on("resize", onResize);
 
+  let stopForwarding = () => {};
   try {
     const child = Bun.spawn([command, ...args], { terminal });
+    started(child.pid);
+    write({ type: "resize", ...stamp(), ...size() });
+    stdin.on("data", onInput);
+    stdin.resume();
+    stdout.on("resize", onResize);
+    stopForwarding = forwardSignals(child, write, { terminal: true });
     const exitCode = await child.exited;
     // Output the program wrote just before exiting may still be in the PTY.
     await Promise.race([terminalClosed, Bun.sleep(100)]);
     return exitCode;
   } finally {
+    stopForwarding();
     stdout.off("resize", onResize);
     stdin.off("data", onInput);
     stdin.setRawMode(false);
@@ -129,12 +178,14 @@ const recInTerminal = async (command: string, args: string[], write: Write) => {
 };
 
 /** Runs the command with piped stdio, keeping stdout and stderr apart. */
-const recInPipes = async (command: string, args: string[], write: Write) => {
+const recInPipes = async (command: string, args: string[], write: Write, started: Started) => {
   const child = Bun.spawn([command, ...args], {
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
   });
+  started(child.pid);
+  const stopForwarding = forwardSignals(child, write, { terminal: false });
 
   const forward = async (
     type: "stdout" | "stderr",
@@ -161,11 +212,15 @@ const recInPipes = async (command: string, args: string[], write: Write) => {
     }
   })();
 
-  await Promise.all([
-    forward("stdout", child.stdout, process.stdout),
-    forward("stderr", child.stderr, process.stderr),
-  ]);
-  return child.exited;
+  try {
+    await Promise.all([
+      forward("stdout", child.stdout, process.stdout),
+      forward("stderr", child.stderr, process.stderr),
+    ]);
+    return await child.exited;
+  } finally {
+    stopForwarding();
+  }
 };
 
 /**
@@ -173,11 +228,14 @@ const recInPipes = async (command: string, args: string[], write: Write) => {
  * real binary while recording every chunk to `<records>/<sessionId>.ndjson`.
  *
  * Record lines, in order:
- * - `{ type: "command", sessionId, timestamp, performance, command, args }`
+ * - `{ type: "command", sessionId, timestamp, performance, command, args, pid }`, where
+ *   `pid` is the process id of the recorded program
  * - `{ type: "stdin" | "stdout" | "stderr", timestamp, performance, size, data }`, where
  *   `size` is the chunk's length in bytes, and `data` is `null` and `data_base64`
  *   holds the bytes if the chunk is not valid UTF-8
  * - `{ type: "resize", timestamp, performance, cols, rows }` when run on a terminal
+ * - `{ type: "signal", timestamp, performance, signal }` when binrec receives SIGTERM,
+ *   SIGHUP, SIGINT or SIGQUIT; SIGTERM and SIGHUP are passed on to the program
  * - `{ type: "end", timestamp, performance, exitCode, total }`, where `total` is the
  *   sum of every chunk's `size`
  *
@@ -185,6 +243,8 @@ const recInPipes = async (command: string, args: string[], write: Write) => {
  *
  * When both stdin and stdout are a terminal, the program runs on a pseudo
  * terminal so interactive programs keep working; otherwise it runs with pipes.
+ * On a pseudo terminal SIGINT and SIGQUIT are passed on too; with pipes the
+ * program already gets them from the terminal.
  */
 export const rec = async (
   target: string,
@@ -221,12 +281,13 @@ export const rec = async (
     record.write(`${JSON.stringify(line)}\n`);
   };
 
-  write({ type: "command", sessionId, ...stamp(), command, args });
+  // The command line goes first, as soon as the program has a pid.
+  const started: Started = (pid) => write({ type: "command", sessionId, ...stamp(), command, args, pid });
 
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
   const exitCode = interactive
-    ? await recInTerminal(command, args, write)
-    : await recInPipes(command, args, write);
+    ? await recInTerminal(command, args, write, started)
+    : await recInPipes(command, args, write, started);
 
   write({ type: "end", ...stamp(), exitCode, total });
   await record.end();

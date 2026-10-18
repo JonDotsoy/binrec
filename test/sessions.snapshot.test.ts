@@ -34,7 +34,7 @@ const normalize = (session: Session | null) => {
     recordPath: "<records>/<sessionId>.ndjson",
     lines: session.lines.map((line) => ({
       ...line,
-      ...(line.type === "command" ? { sessionId: "<sessionId>", command } : {}),
+      ...(line.type === "command" ? { sessionId: "<sessionId>", command, pid: "<pid>" } : {}),
       timestamp: "<timestamp>",
       performance: "<performance>",
     })),

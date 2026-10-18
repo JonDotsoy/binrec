@@ -90,15 +90,16 @@ Settings are saved in `~/.binrec/config.json`. For now it holds one setting, wri
 Each session is one ndjson file:
 
 ```ndjson
-{"type":"command","sessionId":"8969d708-…","timestamp":"2026-10-18T04:05:14.936Z","performance":9.05,"command":"/usr/bin/date","args":["+%F"]}
+{"type":"command","sessionId":"8969d708-…","timestamp":"2026-10-18T04:05:14.936Z","performance":9.05,"command":"/usr/bin/date","args":["+%F"],"pid":48213}
 {"type":"stdout","timestamp":"2026-10-18T04:05:14.949Z","performance":22.70,"size":11,"data":"2026-10-18\n"}
 {"type":"end","timestamp":"2026-10-18T04:05:14.950Z","performance":23.68,"exitCode":0,"total":11}
 ```
 
-- The first line (`command`) has the session id, the absolute path of the binary and its arguments.
+- The first line (`command`) has the session id, the absolute path of the binary, its arguments and `pid`, the process id of the recorded program.
 - Each `stdin`, `stdout` and `stderr` line holds one chunk as text in `data`, and its length in bytes in `size` (the bytes the program read or wrote, not the length of the text or base64).
 - If a chunk is not valid UTF-8 on its own, `data` is `null` and the raw bytes are in `data_base64`, so nothing is lost.
 - On a terminal, `resize` lines hold the window size (`cols`, `rows`): one at the start and one each time the window changes.
+- If binrec gets `SIGTERM` or `SIGHUP` (a `kill`, a closed terminal), it passes the signal on to the program, so it never keeps running on its own, and records a `signal` line. `SIGINT` and `SIGQUIT` are recorded too; on a terminal binrec passes them on, and with pipes the program already gets them from the terminal. Either way the session still ends with its `end` line.
 - The last line (`end`) has the exit code and `total`, the sum of every chunk's `size`.
 - Records are private: each file is created with mode `0600` and a records folder binrec creates gets `0700`, so only the user who recorded a session can read it, whatever the `umask`.
 - `timestamp` is wall-clock time (ISO 8601) and `performance` is `performance.now()` in the recording process.
