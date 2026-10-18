@@ -3,12 +3,15 @@ import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { DISABLED_MARKER, readConfig, type Config, rec } from "./rec.ts";
 import { play, type PlayOptions } from "./play.ts";
+import { playUi, type PlayUiOptions, type PlayUiServer } from "./ui/server.ts";
 import { findSession, lastSession, sessions, type Session } from "./sessions.ts";
 import { stats, type Stats } from "./stats.ts";
 
 export { rec } from "./rec.ts";
 export { play } from "./play.ts";
 export type { PlayOptions } from "./play.ts";
+export { playUi } from "./ui/server.ts";
+export type { PlayUiOptions, PlayUiServer } from "./ui/server.ts";
 export type { Config, RecOptions, RecResult } from "./rec.ts";
 export type { RecordLine, Session } from "./sessions.ts";
 export type { CommandStats, Stats } from "./stats.ts";
@@ -60,6 +63,11 @@ export type Binrec = {
   session(id: string): Promise<Session | null>;
   /** Writes the `stdout` and `stderr` of the session `id` again with its recorded timing. */
   play(id: string, options?: PlayOptions): Promise<void>;
+  /**
+   * Serves a page on 127.0.0.1 that plays the session `id` in a terminal in the
+   * browser, with a timeline to pause, rewind and fast-forward it.
+   */
+  playUi(id: string, options?: PlayUiOptions): Promise<PlayUiServer>;
   /** The most recent recorded session of `command`, or `null` if there is none. */
   lastSession(command: string): Promise<Session | null>;
   /** Bytes consumed by every recorded session, overall and per command (most first). */
@@ -178,6 +186,11 @@ const create = (options: CreateOptions = {}): Binrec => {
       const session = await findSession(records, id);
       if (!session) throw new Error(`binrec: no recorded session ${id} in ${records}`);
       await play(session, options);
+    },
+    playUi: async (id, options) => {
+      const session = await findSession(records, id);
+      if (!session) throw new Error(`binrec: no recorded session ${id} in ${records}`);
+      return playUi(session, options);
     },
     lastSession: (command) => lastSession(records, command),
     stats: () => stats(records),

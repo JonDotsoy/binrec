@@ -62,6 +62,20 @@ test("dist/binrec.js works as the library", async () => {
   expect(last?.exitCode).toBe(0);
 });
 
+test("dist/binrec.js play --ui serves the player with xterm.js from the bundle", async () => {
+  const { binrec } = await import(cli);
+  const b = binrec.create({ path: join(binrecHome, "bin") });
+  const last = await b.lastSession("date");
+  const server = await b.playUi(last.sessionId);
+  try {
+    expect(await fetch(new URL("/xterm.js", server.url)).then((r) => r.text())).toContain("Terminal");
+    expect(await fetch(new URL("/player.js", server.url)).then((r) => r.text())).toStartWith("(function player()");
+    expect((await fetch(new URL("/session.json", server.url)).then((r) => r.json())).sessionId).toBe(last.sessionId);
+  } finally {
+    await server.stop();
+  }
+});
+
 test("dist/binrec.js --version prints the built version", async () => {
   const { version } = await Bun.file(join(root, "package.json")).json();
   expect(await $`${cli} --version`.text()).toBe(`${version}\n`);

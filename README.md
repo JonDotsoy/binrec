@@ -55,6 +55,7 @@ binrec rec --records ./records /usr/bin/date +%F
 | `binrec stats` | Shows how many sessions were recorded, how many bytes they consumed in total, and a ranking of the commands that consumed the most. |
 | `binrec list [<bin>]` | Lists the recorded sessions, oldest first, with their id, start time, exit code, size and command line. With `<bin>`, only the sessions of that binary. |
 | `binrec play [--timestamps] [--no-wait \| --speed <n>] <id>` | Plays session `<id>` back: writes its `stdout` and `stderr` again, each chunk as long after the start as it was recorded. The start of an id is enough when it matches only one session. `--timestamps` (`-t`) shows every line with its recorded timestamp, the time since the start and its stream. `--no-wait` (`-n`) writes the whole output at once, to see how the session ended. `--speed 2` plays twice as fast, `--speed 0.5` half as fast, and `--speed 0` is the same as `--no-wait`. |
+| `binrec play --ui [--port <n>] [--speed <n>] <id>` | Plays session `<id>` in the browser instead: serves a page on `127.0.0.1` (on a free port, or `--port`), prints its address and runs until Ctrl+C. See [Play in the browser](#play-in-the-browser). |
 | `binrec rec [--records <dir>] [--config <file>] <path> [args…]` | Runs `<path>`, passes stdio through, records the session and exits with its exit code. |
 | `binrec --version` (`-v`) | Prints the binrec version. |
 | `binrec --help` (`-h`) | Prints every command. `binrec <command> --help` (or `-h`) prints the help of one command without running it. For `rec`, only a lone `binrec rec --help` does; with more arguments, `--help` goes to the recorded program. |
@@ -128,6 +129,27 @@ binrec play -t -n e531b87f        # every line with its timestamp, without waiti
 
 The animations above are made from a real record with `bun scripts/demo-svg.ts <record.ndjson> docs/play.svg [--timestamps]`.
 
+### Play in the browser
+
+`binrec play --ui <id>` plays the session in a terminal in the browser, with a timeline to pause, rewind and fast-forward it:
+
+```console
+$ binrec play --ui 81225734
+Playing 81225734 at http://127.0.0.1:41437/
+Open it in your browser. Press Ctrl+C to stop.
+```
+
+![binrec play --ui playing a recorded session](docs/play-ui.png)
+
+- The terminal is [xterm.js](https://xtermjs.org), so colors, cursor moves and full-screen programs (`top`, `vim`, progress bars) look as they did. It starts at the size of the terminal the session was recorded on, and follows its resizes.
+- The timeline under it runs from the start of the session to its end. Every output is a tick (taller for more bytes, red for `stderr`), and bursts of output are shaded, so you can see when the screen changed.
+- Click or drag the timeline to jump to any moment, forward or back. ⏮ and ⏭ (or `,` and `.`) jump to the previous or next change; Space plays and pauses; ← and → move 1 second (10 with Shift); Home and End go to the start and the end.
+- Speed goes from 0.25× to 16× (`--speed` sets where it starts), and **Skip pauses** cuts long waits short.
+
+![Scrubbing the timeline of binrec play --ui](docs/play-ui.gif)
+
+The page only listens on `127.0.0.1` and only answers requests addressed to `127.0.0.1` or `localhost`, so other machines and other websites cannot read the session. Everything it needs, xterm.js included, is served by binrec itself, so it works offline.
+
 ## Record format
 
 Each session is one ndjson file:
@@ -175,6 +197,7 @@ session?.lines;    // every ndjson line of the session
 | `b.sessions(command?)` | Every recorded session of `command`, or of every command when it is left out, oldest first. `command` can be a name (`date`) or an absolute path. |
 | `b.session(id)` | The session whose id is `id` or starts with `id`, or `null`. Throws when the start matches more than one session. |
 | `b.play(id, { speed?, timestamps?, stdout?, stderr? })` | Writes the `stdout` and `stderr` of session `id` again with the recorded timing, like `binrec play`. Throws if there is no such session. |
+| `b.playUi(id, { port?, speed? })` | Serves the page of `binrec play --ui` for session `id` and returns `{ url, stop() }`. Throws if there is no such session. |
 | `b.lastSession(command)` | The most recent session of `command`, or `null`. |
 | `b.stats()` | `{ sessions, total, commands }` from the sessions' stats files: the number of sessions, the bytes they consumed, and one `{ command, sessions, total }` per binary, the one that consumed the most first. A record without a stats file is read instead; records without `size` or `total` (older or unfinished ones) are counted from their data. |
 | `b.disableRecords()` / `b.enableRecords()` | Turns recording off or on in `config.json`, for every shim installed by this instance. Shims keep working while recording is off. |
@@ -183,6 +206,7 @@ session?.lines;    // every ndjson line of the session
 | `b.isRecording()` | `true` unless recording was turned off. |
 | `binrec.rec(path, args, { records })` | Runs and records one command, like `binrec rec`. Pass `records: false` to run without recording. |
 | `play(session, { speed?, timestamps?, stdout?, stderr? })` | Plays a `Session` you already read back to `stdout` and `stderr` (default `process.stdout` and `process.stderr`). |
+| `playUi(session, { port?, speed? })` | Serves the `binrec play --ui` page for a `Session` you already read and returns `{ url, stop() }`. |
 
 Each session has `sessionId`, `command`, `args`, `timestamp`, `exitCode` (`null` if it has not ended), `total` (bytes consumed), `recordPath` and `lines`.
 
