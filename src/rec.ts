@@ -232,7 +232,7 @@ export const rec = async (
   await record.end();
 
   try {
-    await addToStats(records, command, total);
+    await addToStats(records, { sessionId, command, total });
   } catch {
     // The totals are a cache that `binrec stats` can rebuild; never fail the command over them.
   }

@@ -24,13 +24,36 @@ export type Stats = {
 /** File in the records folder that holds the running totals, rewritten after every session. */
 export const STATS_FILE = "stats.json";
 
+/** What `stats.json` holds. */
+type StatsFile = Stats & {
+  /**
+   * Sessions a rebuild already counted that may still be about to add
+   * themselves; each one is dropped from the list instead of counted twice.
+   */
+  counted?: string[];
+};
+
+/** A session adds itself right after it ends; records newer than this may not have yet. */
+const PENDING_MS = 60_000;
+
 const sortCommands = (commands: CommandStats[]) =>
   commands.sort((a, b) => b.total - a.total || a.command.localeCompare(b.command));
 
-/** Adds up the bytes of every record in `records`, overall and per command. */
-const computeStats = async (records: string): Promise<Stats> => {
-  const all = await sessions(records);
+const recordAge = (recordPath: string) =>
+  stat(recordPath).then((s) => Date.now() - s.mtimeMs, () => Infinity);
+
+/** True when the session of `recordPath` ended so recently that it may not have added itself yet. */
+const mayBePending = async (recordPath: string) => (await recordAge(recordPath)) < PENDING_MS;
+
+/**
+ * Adds up the bytes of every finished record in `records`, overall and per
+ * command. Records without an `end` line are left out: a running session adds
+ * itself when it ends.
+ */
+const computeStats = async (records: string): Promise<StatsFile> => {
+  const all = (await sessions(records)).filter((session) => session.exitCode !== null);
   const byCommand = new Map<string, CommandStats>();
+  const counted: string[] = [];
   for (const session of all) {
     const entry = byCommand.get(session.command) ?? {
       command: session.command,
@@ -40,16 +63,18 @@ const computeStats = async (records: string): Promise<Stats> => {
     entry.sessions += 1;
     entry.total += session.total;
     byCommand.set(session.command, entry);
+    if (await mayBePending(session.recordPath)) counted.push(session.sessionId);
   }
 
   return {
     sessions: all.length,
     total: all.reduce((sum, session) => sum + session.total, 0),
     commands: sortCommands([...byCommand.values()]),
+    counted,
   };
 };
 
-const readStatsFile = async (path: string): Promise<Stats | null> => {
+const readStatsFile = async (path: string): Promise<StatsFile | null> => {
   try {
     const stats = await Bun.file(path).json();
     return Array.isArray(stats?.commands) ? stats : null;
@@ -59,29 +84,28 @@ const readStatsFile = async (path: string): Promise<Stats | null> => {
 };
 
 /** Replaces the stats file in one step, so a reader never sees half of it. */
-const writeStatsFile = async (path: string, stats: Stats) => {
+const writeStatsFile = async (path: string, stats: StatsFile) => {
   const temp = `${path}.${process.pid}.${crypto.randomUUID()}.tmp`;
   await writeFile(temp, `${JSON.stringify(stats, null, 2)}\n`, { mode: RECORD_FILE_MODE, flag: "wx" });
   await rename(temp, path);
 };
 
-/** A lock older than this belongs to a session that died while holding it. */
+/** A lock older than this belongs to a session that died while holding it; an update takes milliseconds. */
 const STALE_LOCK_MS = 10_000;
 
 /** Runs `update` while holding a lock on the stats file, so concurrent sessions don't lose counts. */
 const withLock = async <T>(path: string, update: () => Promise<T>) => {
   const lock = `${path}.lock`;
-  for (let attempt = 0; ; attempt++) {
+  for (;;) {
     try {
       await mkdir(lock);
       break;
-    } catch {
+    } catch (error) {
+      // A missing records folder means there is nothing to lock.
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       const age = await stat(lock).then((s) => Date.now() - s.mtimeMs, () => 0);
-      if (age > STALE_LOCK_MS || attempt >= 500) {
-        await rm(lock, { recursive: true, force: true });
-      } else {
-        await Bun.sleep(10);
-      }
+      if (age > STALE_LOCK_MS) await rm(lock, { recursive: true, force: true });
+      else await Bun.sleep(5 + Math.random() * 10);
     }
   }
   try {
@@ -95,26 +119,38 @@ const withLock = async <T>(path: string, update: () => Promise<T>) => {
  * Adds a finished session to `<records>/stats.json`. When the file does not
  * exist yet it is built from every record in the folder, the new one included.
  */
-export const addToStats = async (records: string, command: string, total: number) => {
+export const addToStats = async (
+  records: string,
+  session: { sessionId: string; command: string; total: number },
+) => {
   const path = join(records, STATS_FILE);
   await withLock(path, async () => {
-    const current = await readStatsFile(path);
-    if (!current) {
-      await writeStatsFile(path, await computeStats(records));
+    const current = (await readStatsFile(path)) ?? (await computeStats(records));
+    // Ids whose session ended long ago will never come back; drop them.
+    const counted: string[] = [];
+    for (const id of current.counted ?? []) {
+      if (await mayBePending(join(records, `${id}.ndjson`))) counted.push(id);
+    }
+
+    if (counted.includes(session.sessionId)) {
+      // A rebuild already counted this session.
+      const rest = counted.filter((id) => id !== session.sessionId);
+      await writeStatsFile(path, { ...current, counted: rest.length ? rest : undefined });
       return;
     }
 
-    const entry = current.commands.find((item) => item.command === command);
+    const entry = current.commands.find((item) => item.command === session.command);
     if (entry) {
       entry.sessions += 1;
-      entry.total += total;
+      entry.total += session.total;
     } else {
-      current.commands.push({ command, sessions: 1, total });
+      current.commands.push({ command: session.command, sessions: 1, total: session.total });
     }
     await writeStatsFile(path, {
       sessions: current.sessions + 1,
-      total: current.total + total,
+      total: current.total + session.total,
       commands: sortCommands(current.commands),
+      counted: counted.length ? counted : undefined,
     });
   });
 };
@@ -125,14 +161,25 @@ export const addToStats = async (records: string, command: string, total: number
  */
 export const stats = async (records: string): Promise<Stats> => {
   const path = join(records, STATS_FILE);
+  const toStats = ({ sessions, total, commands }: StatsFile): Stats => ({
+    sessions,
+    total,
+    commands,
+  });
   const current = await readStatsFile(path);
-  if (current) return current;
+  if (current) return toStats(current);
 
-  const computed = await computeStats(records);
-  if (computed.sessions > 0) {
-    await withLock(path, async () => {
-      if (!(await readStatsFile(path))) await writeStatsFile(path, computed);
-    }).catch(() => {}); // read-only records folder: the numbers are still right
+  try {
+    return toStats(
+      await withLock(path, async () => {
+        const existing = await readStatsFile(path);
+        if (existing) return existing;
+        const computed = await computeStats(records);
+        if (computed.sessions > 0) await writeStatsFile(path, computed);
+        return computed;
+      }),
+    );
+  } catch {
+    return toStats(await computeStats(records)); // read-only records folder
   }
-  return computed;
 };

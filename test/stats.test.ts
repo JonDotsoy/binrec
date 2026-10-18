@@ -74,7 +74,7 @@ test("binrec stats shows the total consumed and ranks the commands", async () =>
 
 test("every session rewrites stats.json and binrec stats reads it", async () => {
   const path = join(b.records, "stats.json");
-  expect(await Bun.file(path).json()).toEqual(await b.stats());
+  expect(await Bun.file(path).json()).toMatchObject(await b.stats());
 
   await $`echo 123 | cat`.env(env).quiet();
   const stats = await Bun.file(path).json();
@@ -95,6 +95,19 @@ test("sessions running at the same time all reach stats.json", async () => {
   expect(after.sessions).toBe(before + 8);
 });
 
+test("sessions that start before stats.json exists are counted once", async () => {
+  const fresh = lib.create({ path: join(binrecHome, "fresh", "bin") });
+  await fresh.install("cat");
+  const freshEnv = { ...process.env, PATH: `${fresh.path}:${process.env.PATH}` };
+  await Promise.all(Array.from({ length: 16 }, () => $`echo x | cat`.env(freshEnv).quiet()));
+  const stats = await Bun.file(join(fresh.records, "stats.json")).json();
+  expect(stats).toEqual({
+    sessions: 16,
+    total: 16 * 4,
+    commands: [{ command: expect.any(String), sessions: 16, total: 16 * 4 }],
+  });
+});
+
 test("binrec stats rebuilds stats.json from records without size or total", async () => {
   const legacy = join(b.records, "legacy.ndjson");
   await Bun.write(
@@ -113,7 +126,7 @@ test("binrec stats rebuilds stats.json from records without size or total", asyn
   await rm(join(b.records, "stats.json"));
   try {
     const stats = await b.stats();
-    expect(await Bun.file(join(b.records, "stats.json")).json()).toEqual(stats);
+    expect(await Bun.file(join(b.records, "stats.json")).json()).toMatchObject(stats);
     expect(stats.commands.find(({ command }) => command === "/bin/legacy")).toEqual({
       command: "/bin/legacy",
       sessions: 1,
