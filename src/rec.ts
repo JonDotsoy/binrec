@@ -20,6 +20,20 @@ export type RecResult = {
 /** Name of the marker file that turns recording off for a records folder. */
 export const DISABLED_MARKER = ".disabled";
 
+const strictDecoder = new TextDecoder("utf-8", { fatal: true });
+
+/**
+ * Encodes a chunk for the record: `data` holds the text when the chunk is valid
+ * UTF-8 on its own; otherwise `data` is `null` and `data_base64` holds the bytes.
+ */
+const encodeChunk = (chunk: Uint8Array) => {
+  try {
+    return { data: strictDecoder.decode(chunk) };
+  } catch {
+    return { data: null, data_base64: Buffer.from(chunk).toString("base64") };
+  }
+};
+
 const stamp = () => ({
   timestamp: new Date().toISOString(),
   performance: performance.now(),
@@ -31,7 +45,8 @@ const stamp = () => ({
  *
  * Record lines, in order:
  * - `{ type: "command", sessionId, timestamp, performance, command, args }`
- * - `{ type: "stdin" | "stdout" | "stderr", timestamp, performance, data }`
+ * - `{ type: "stdin" | "stdout" | "stderr", timestamp, performance, data }`, where
+ *   `data` is `null` and `data_base64` holds the bytes if the chunk is not valid UTF-8
  * - `{ type: "end", timestamp, performance, exitCode }`
  */
 export const rec = async (
@@ -73,20 +88,18 @@ export const rec = async (
     source: ReadableStream<Uint8Array>,
     sink: NodeJS.WriteStream,
   ) => {
-    const decoder = new TextDecoder();
     for await (const chunk of source) {
       sink.write(chunk);
-      write({ type, ...stamp(), data: decoder.decode(chunk, { stream: true }) });
+      write({ type, ...stamp(), ...encodeChunk(chunk) });
     }
   };
 
   // Not awaited: on a terminal stdin may never end, and the session is over
   // once the child exits.
   void (async () => {
-    const decoder = new TextDecoder();
     try {
       for await (const chunk of process.stdin as AsyncIterable<Uint8Array>) {
-        write({ type: "stdin", ...stamp(), data: decoder.decode(chunk, { stream: true }) });
+        write({ type: "stdin", ...stamp(), ...encodeChunk(chunk) });
         child.stdin.write(chunk);
         await child.stdin.flush();
       }

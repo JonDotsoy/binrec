@@ -14,7 +14,10 @@ export type RecordLine =
       type: "stdin" | "stdout" | "stderr";
       timestamp: string;
       performance: number;
-      data: string;
+      /** The chunk as text, or `null` when it is not valid UTF-8. */
+      data: string | null;
+      /** The chunk's bytes in base64, present only when `data` is `null`. */
+      data_base64?: string;
     }
   | { type: "end"; timestamp: string; performance: number; exitCode: number };
 

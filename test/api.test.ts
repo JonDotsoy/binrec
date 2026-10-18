@@ -147,3 +147,18 @@ test("disableRecords turns recording off until enableRecords", async () => {
   await $`date +%Y`.env(env).quiet();
   expect(await b.sessions("date")).toHaveLength(1);
 });
+
+test("chunks that are not valid UTF-8 are recorded as data_base64", async () => {
+  const b = binrec.create({ path: join(tmp, "binary", "bin") });
+  await b.install("printf");
+
+  const env = { ...process.env, PATH: `${b.path}:${process.env.PATH}` };
+  const format = "\\377abc";
+  const result = await $`printf ${format}`.env(env).quiet();
+  expect([...result.stdout]).toEqual([0xff, 0x61, 0x62, 0x63]);
+
+  const session = await b.lastSession("printf");
+  const stdout = session!.lines.filter((l) => l.type === "stdout");
+  expect(stdout).toHaveLength(1);
+  expect(stdout[0]).toMatchObject({ data: null, data_base64: "/2FiYw==" });
+});
