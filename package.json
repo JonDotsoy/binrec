@@ -1,0 +1,23 @@
+{
+  "name": "@jondotsoy/binrec",
+  "version": "0.0.1",
+  "module": "index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "bin": {
+    "binrec": "bin/binrec.ts"
+  },
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "bun run scripts/build.ts",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  }
+}

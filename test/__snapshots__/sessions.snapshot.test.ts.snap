@@ -1,0 +1,221 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`date session 1`] = `
+{
+  "args": [
+    "-u",
+    "-d",
+    "@0",
+    "+%F",
+  ],
+  "command": "<path>/date",
+  "exitCode": 0,
+  "lines": [
+    {
+      "args": [
+        "-u",
+        "-d",
+        "@0",
+        "+%F",
+      ],
+      "command": "<path>/date",
+      "performance": "<performance>",
+      "sessionId": "<sessionId>",
+      "timestamp": "<timestamp>",
+      "type": "command",
+    },
+    {
+      "data": 
+"1970-01-01
+"
+,
+      "performance": "<performance>",
+      "timestamp": "<timestamp>",
+      "type": "stdout",
+    },
+    {
+      "exitCode": 0,
+      "performance": "<performance>",
+      "timestamp": "<timestamp>",
+      "type": "end",
+    },
+  ],
+  "recordPath": "<records>/<sessionId>.ndjson",
+  "sessionId": "<sessionId>",
+  "timestamp": "<timestamp>",
+}
+`;
+
+exports[`cat session with stdin 1`] = `
+{
+  "args": [],
+  "command": "<path>/cat",
+  "exitCode": 0,
+  "lines": [
+    {
+      "args": [],
+      "command": "<path>/cat",
+      "performance": "<performance>",
+      "sessionId": "<sessionId>",
+      "timestamp": "<timestamp>",
+      "type": "command",
+    },
+    {
+      "data": 
+"hola
+"
+,
+      "performance": "<performance>",
+      "timestamp": "<timestamp>",
+      "type": "stdin",
+    },
+    {
+      "data": 
+"hola
+"
+,
+      "performance": "<performance>",
+      "timestamp": "<timestamp>",
+      "type": "stdout",
+    },
+    {
+      "exitCode": 0,
+      "performance": "<performance>",
+      "timestamp": "<timestamp>",
+      "type": "end",
+    },
+  ],
+  "recordPath": "<records>/<sessionId>.ndjson",
+  "sessionId": "<sessionId>",
+  "timestamp": "<timestamp>",
+}
+`;
+
+exports[`printf session with bytes that are not UTF-8 1`] = `
+{
+  "args": [
+    "\\377abc",
+  ],
+  "command": "<path>/printf",
+  "exitCode": 0,
+  "lines": [
+    {
+      "args": [
+        "\\377abc",
+      ],
+      "command": "<path>/printf",
+      "performance": "<performance>",
+      "sessionId": "<sessionId>",
+      "timestamp": "<timestamp>",
+      "type": "command",
+    },
+    {
+      "data": null,
+      "data_base64": "/2FiYw==",
+      "performance": "<performance>",
+      "timestamp": "<timestamp>",
+      "type": "stdout",
+    },
+    {
+      "exitCode": 0,
+      "performance": "<performance>",
+      "timestamp": "<timestamp>",
+      "type": "end",
+    },
+  ],
+  "recordPath": "<records>/<sessionId>.ndjson",
+  "sessionId": "<sessionId>",
+  "timestamp": "<timestamp>",
+}
+`;
+
+exports[`sessions of a command 1`] = `
+[
+  {
+    "args": [
+      "-u",
+      "-d",
+      "@0",
+      "+%F",
+    ],
+    "command": "<path>/date",
+    "exitCode": 0,
+    "lines": [
+      {
+        "args": [
+          "-u",
+          "-d",
+          "@0",
+          "+%F",
+        ],
+        "command": "<path>/date",
+        "performance": "<performance>",
+        "sessionId": "<sessionId>",
+        "timestamp": "<timestamp>",
+        "type": "command",
+      },
+      {
+        "data": 
+"1970-01-01
+"
+,
+        "performance": "<performance>",
+        "timestamp": "<timestamp>",
+        "type": "stdout",
+      },
+      {
+        "exitCode": 0,
+        "performance": "<performance>",
+        "timestamp": "<timestamp>",
+        "type": "end",
+      },
+    ],
+    "recordPath": "<records>/<sessionId>.ndjson",
+    "sessionId": "<sessionId>",
+    "timestamp": "<timestamp>",
+  },
+  {
+    "args": [
+      "-u",
+      "-d",
+      "@86400",
+      "+%F",
+    ],
+    "command": "<path>/date",
+    "exitCode": 0,
+    "lines": [
+      {
+        "args": [
+          "-u",
+          "-d",
+          "@86400",
+          "+%F",
+        ],
+        "command": "<path>/date",
+        "performance": "<performance>",
+        "sessionId": "<sessionId>",
+        "timestamp": "<timestamp>",
+        "type": "command",
+      },
+      {
+        "data": 
+"1970-01-02
+"
+,
+        "performance": "<performance>",
+        "timestamp": "<timestamp>",
+        "type": "stdout",
+      },
+      {
+        "exitCode": 0,
+        "performance": "<performance>",
+        "timestamp": "<timestamp>",
+        "type": "end",
+      },
+    ],
+    "recordPath": "<records>/<sessionId>.ndjson",
+    "sessionId": "<sessionId>",
+    "timestamp": "<timestamp>",
+  },
+]
+`;
