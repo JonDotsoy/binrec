@@ -11,8 +11,8 @@ const usage = (b: Binrec) => `Usage:
   binrec uninstall --all   Remove every shim in ${b.path} (records are kept)
   binrec on                Turn recording on (also: binrec enable)
   binrec off               Turn recording off, shims still run (also: binrec disable)
-  binrec on <bin>          Same as binrec install <bin>
-  binrec off <bin>         Same as binrec uninstall <bin>
+  binrec on <bin>          Same as binrec install <bin> (also: binrec enable <bin>)
+  binrec off <bin>         Same as binrec uninstall <bin>, --all too (also: binrec disable <bin>)
   binrec stats             Show how many bytes the recorded sessions consumed and
                            rank the commands that consumed the most
   binrec list [<bin>]      List the recorded sessions (of <bin> only, if given) with
@@ -43,12 +43,12 @@ Recorded sessions are kept.`,
   on: (b) => `Usage: binrec on [<bin>]
 
 Without <bin>, turn recording on: shims save their sessions in ${b.records}.
-With <bin>, same as binrec install <bin>. Also: binrec enable`,
+With <bin>, same as binrec install <bin>. Also: binrec enable [<bin>]`,
   off: () => `Usage: binrec off [<bin> | --all]
 
 Without <bin>, turn recording off: shims keep running the real binary but
 nothing is recorded. With <bin> or --all, same as binrec uninstall.
-Also: binrec disable`,
+Also: binrec disable [<bin> | --all]`,
   stats: (b) => `Usage: binrec stats
 
 Show how many sessions are recorded in ${b.records}, how many bytes they
@@ -300,13 +300,13 @@ export const runCli = async (argv: string[]) => {
       process.exit(await uninstall(b, rest[0]));
     case "on":
     case "enable":
-      if (command === "on" && rest[0]) process.exit(await install(b, rest[0]));
+      if (rest[0]) process.exit(await install(b, rest[0]));
       await b.enableRecords();
       console.log(`Recording is on: sessions are saved in ${b.records}`);
       process.exit(0);
     case "off":
     case "disable":
-      if (command === "off" && rest[0]) process.exit(await uninstall(b, rest[0]));
+      if (rest[0]) process.exit(await uninstall(b, rest[0]));
       await b.disableRecords();
       console.log("Recording is off: shims run the real binary without recording");
       process.exit(0);
