@@ -2,7 +2,8 @@ import { version } from "../package.json";
 import { binrec, type Binrec } from "./binrec.ts";
 
 const usage = (b: Binrec) => `Usage:
-  binrec --version         Print the binrec version
+  binrec help [<command>]  Show this help, or the help of <command> (also: --help, -h)
+  binrec --version         Print the binrec version (also: -v)
   binrec install           Create ${b.path} and show how to add it to PATH
   binrec install <bin>     Install a shim for <bin> in ${b.path}
   binrec uninstall <bin>   Remove the shim for <bin> (records are kept)
@@ -14,7 +15,78 @@ const usage = (b: Binrec) => `Usage:
   binrec stats             Show how many bytes the recorded sessions consumed and
                            rank the commands that consumed the most
   binrec rec [--records <dir>] [--config <file>] <path> [...]
-                           Run <path> passing stdio through and record it in ${b.records}`;
+                           Run <path> passing stdio through and record it in ${b.records}
+
+Run binrec help <command> for more about a command.`;
+
+/** Help of each command, shown by `binrec help <command>` and `binrec <command> --help`. */
+const commandHelp: Record<string, (b: Binrec) => string> = {
+  help: () => `Usage: binrec help [<command>]
+
+Show the list of binrec commands, or the help of <command>.
+Also: binrec --help, binrec -h, binrec <command> --help`,
+  "--version": () => `Usage: binrec --version
+
+Print the binrec version. Also: binrec -v`,
+  install: (b) => `Usage: binrec install [<bin>]
+
+Without <bin>, create ${b.path} and show the line that adds it to PATH.
+With <bin>, resolve the real path of <bin> and install a shim for it in
+${b.path} that runs it through binrec rec, so every call is recorded in
+${b.records}.`,
+  uninstall: (b) => `Usage: binrec uninstall <bin>
+       binrec uninstall --all
+
+Remove the shim for <bin>, or every shim with --all, from ${b.path}.
+Recorded sessions are kept.`,
+  on: (b) => `Usage: binrec on [<bin>]
+
+Without <bin>, turn recording on: shims save their sessions in ${b.records}.
+With <bin>, same as binrec install <bin>. Also: binrec enable`,
+  off: () => `Usage: binrec off [<bin> | --all]
+
+Without <bin>, turn recording off: shims keep running the real binary but
+nothing is recorded. With <bin> or --all, same as binrec uninstall.
+Also: binrec disable`,
+  stats: (b) => `Usage: binrec stats
+
+Show how many sessions are recorded in ${b.records}, how many bytes they
+consumed in total, and rank the commands that consumed the most.`,
+  rec: (b) => `Usage: binrec rec [--records <dir>] [--config <file>] <path> [...]
+
+Run <path> with the given arguments, pass stdin, stdout and stderr through,
+record the session and exit with the program's exit code.
+
+  --records <dir>   Folder for the records (default: ${b.records})
+  --config <file>   Settings file to read (default: ${b.config})`,
+};
+
+const aliases: Record<string, string> = {
+  "--help": "help",
+  "-h": "help",
+  "-v": "--version",
+  enable: "on",
+  disable: "off",
+};
+
+const isHelpFlag = (arg?: string) => arg === "--help" || arg === "-h";
+
+/** Prints the help of `command`, or the general usage without one. */
+const help = (b: Binrec, command?: string) => {
+  if (!command) {
+    console.log(usage(b));
+    return 0;
+  }
+  const text = commandHelp[aliases[command] ?? command];
+  if (!text) {
+    console.error(`binrec: unknown command ${command}`);
+    console.error("");
+    console.error(usage(b));
+    return 1;
+  }
+  console.log(text(b));
+  return 0;
+};
 
 const install = async (b: Binrec, command?: string) => {
   if (!command) {
@@ -104,7 +176,19 @@ export const runCli = async (argv: string[]) => {
   const b = binrec.create();
   const [command, ...rest] = argv;
 
+  // `binrec <command> --help` shows that command's help instead of running it.
+  if (command && (aliases[command] ?? command) in commandHelp && isHelpFlag(rest[0])) {
+    process.exit(help(b, command));
+  }
+
   switch (command) {
+    case undefined:
+      console.log(usage(b));
+      process.exit(0);
+    case "help":
+    case "--help":
+    case "-h":
+      process.exit(help(b, rest[0]));
     case "--version":
     case "-v":
       console.log(version);
@@ -143,7 +227,9 @@ export const runCli = async (argv: string[]) => {
       process.exit(exitCode);
     }
     default:
+      console.error(`binrec: unknown command ${command}`);
+      console.error("");
       console.error(usage(b));
-      process.exit(command ? 1 : 0);
+      process.exit(1);
   }
 };

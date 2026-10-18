@@ -55,6 +55,7 @@ binrec rec --records ./records /usr/bin/date +%F
 | `binrec stats` | Shows how many sessions were recorded, how many bytes they consumed in total, and a ranking of the commands that consumed the most. |
 | `binrec rec [--records <dir>] [--config <file>] <path> [args…]` | Runs `<path>`, passes stdio through, records the session and exits with its exit code. |
 | `binrec --version` (`-v`) | Prints the binrec version. |
+| `binrec help [<command>]` (`--help`, `-h`) | Lists every command, or shows the help of `<command>`. `binrec <command> --help` works too. |
 
 Every session writes its size to its own `~/.binrec/records/<sessionId>.stats.json`, and `binrec stats` adds up those small files instead of reading every record:
 
