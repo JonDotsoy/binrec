@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>binrec · Record everything a command reads and writes</title>
+<meta name="description" content="binrec puts a small shim in front of any binary on your PATH and records every session (arguments, stdin, stdout, stderr and exit code) to ndjson.">
+<meta property="og:title" content="binrec">
+<meta property="og:description" content="Record everything a command reads and writes.">
+<meta property="og:image" content="banner.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#f2f0eb">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='9' fill='%23421d24'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --color-midnight-wine: #421d24;
+  --color-royal-violet: #714cb6;
+  --color-lilac-mist: #d4c7ff;
+  --color-deep-lagoon: #0c4243;
+  --color-warm-parchment: #f2f0eb;
+  --color-soft-mist: #e3e3e2;
+  --color-ink-charcoal: #292827;
+  --color-stone-gray: #666666;
+  --color-paper-white: #ffffff;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --text-caption: 12px;
+  --text-body-sm: 14px;
+  --text-body: 16px;
+  --text-label-bold: 19px;
+  --text-subheading: 26px;
+  --text-heading-sm: 28px;
+  --text-heading-lg: 49px;
+  --text-display: 64px;
+
+  --radius-tabs: 8px;
+  --radius-cards: 16px;
+  --radius-pills: 999px;
+  --radius-buttons: 16px;
+  --radius-small-buttons: 8px;
+
+  --page-max-width: 1200px;
+  --gutter: 24px;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+body {
+  margin: 0;
+  background: var(--color-warm-parchment);
+  color: var(--color-ink-charcoal);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  font-weight: 460;
+  line-height: 1.5;
+  font-feature-settings: "ss01" on, "cv11" on;
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; display: block; }
+code, pre, kbd { font-family: var(--font-mono); font-feature-settings: normal; }
+a { color: var(--color-royal-violet); text-decoration: none; text-underline-offset: 3px; transition: text-decoration-color .2s ease; text-decoration-line: underline; text-decoration-color: transparent; }
+a:hover { text-decoration-color: currentColor; }
+
+.wrap { max-width: var(--page-max-width); margin: 0 auto; padding: 0 var(--gutter); }
+.eyebrow { font-size: var(--text-body-sm); font-weight: 540; color: var(--color-stone-gray); margin: 0 0 12px; }
+h1, h2, h3 { font-weight: 460; margin: 0; }
+.display { font-size: var(--text-display); line-height: .96; letter-spacing: -0.028em; }
+.heading-lg { font-size: var(--text-heading-lg); line-height: 1.1; letter-spacing: -0.027em; }
+.heading-sm { font-size: var(--text-heading-sm); line-height: 1.14; letter-spacing: -0.022em; }
+.lead { font-size: 18px; letter-spacing: -0.008em; line-height: 1.5; color: var(--color-stone-gray); max-width: 560px; }
+
+/* Announcement banner */
+.announce {
+  background: var(--color-midnight-wine);
+  color: var(--color-paper-white);
+  font-size: var(--text-body-sm);
+  padding: 10px 16px;
+  display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap;
+  text-align: center;
+}
+.announce code { background: rgba(255,255,255,.12); padding: 1px 6px; border-radius: 6px; font-size: 13px; }
+.announce a {
+  color: var(--color-paper-white);
+  border: 1px solid rgba(255,255,255,.4);
+  border-radius: var(--radius-pills);
+  padding: 2px 12px;
+}
+.announce a:hover { border-color: #fff; text-decoration-color: transparent; }
+
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 10;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  background: rgba(242,240,235,.72);
+  border-bottom: 1px solid transparent;
+  transition: border-color .2s ease;
+}
+.header.scrolled { border-bottom-color: var(--color-soft-mist); }
+.header .wrap { height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--color-ink-charcoal); font-family: var(--font-mono); font-weight: 500; font-size: 20px; letter-spacing: -0.02em; }
+.brand:hover { text-decoration-color: transparent; }
+.rec-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--color-midnight-wine); box-shadow: 0 0 0 4px rgba(66,29,36,.12); animation: blink 1.4s steps(1, end) infinite; }
+@keyframes blink { 0%, 55% { opacity: 1 } 56%, 100% { opacity: .3 } }
+@media (prefers-reduced-motion: reduce) { .rec-dot { animation: none; } html { scroll-behavior: auto; } }
+.nav { display: flex; gap: 32px; }
+.nav a, .ghost { color: var(--color-ink-charcoal); }
+.nav a:hover, .ghost:hover { text-decoration-color: currentColor; }
+.header-actions { display: flex; align-items: center; gap: 20px; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font: inherit; font-weight: 460; cursor: pointer; border: 0;
+  text-decoration: none;
+}
+.btn:hover { text-decoration-color: transparent; }
+.btn-primary {
+  background: var(--color-midnight-wine); color: var(--color-paper-white);
+  border-radius: var(--radius-buttons); height: 48px; padding: 0 20px;
+  transition: background .2s ease;
+}
+.btn-primary:hover { background: #57272f; }
+.btn-lilac {
+  background: var(--color-lilac-mist); color: var(--color-ink-charcoal);
+  border: 1px solid var(--color-ink-charcoal); border-radius: var(--radius-small-buttons);
+  padding: 6px 16px;
+}
+.btn-lilac:hover { background: #c9b9ff; }
+.btn-white { background: var(--color-paper-white); color: var(--color-ink-charcoal); border-radius: var(--radius-buttons); height: 48px; padding: 0 20px; }
+.btn-outline-white { color: #fff; border: 1px solid #fff; border-radius: var(--radius-small-buttons); padding: 8px 20px; }
+.btn-outline-white:hover { background: rgba(255,255,255,.08); }
+.arrow { width: 16px; height: 16px; }
+
+/* Hero */
+.hero {
+  position: relative; overflow: hidden;
+  background:
+    radial-gradient(40% 55% at 72% 38%, rgba(212,199,255,.85), transparent 70%),
+    radial-gradient(35% 45% at 95% 70%, rgba(166,196,255,.55), transparent 70%),
+    radial-gradient(45% 40% at 40% 105%, rgba(255,196,214,.6), transparent 70%),
+    radial-gradient(35% 40% at 10% 20%, rgba(255,221,180,.55), transparent 70%),
+    var(--color-warm-parchment);
+  padding: 96px 0 112px;
+}
+.hero-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 64px; align-items: center; }
+.hero h1 { margin-bottom: 24px; }
+.hero h1 em { font-style: normal; color: var(--color-royal-violet); }
+.install {
+  margin-top: 36px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+}
+.copy {
+  display: inline-flex; align-items: center; gap: 12px;
+  background: rgba(255,255,255,.85); border: 1px solid rgba(255,255,255,.6);
+  border-radius: var(--radius-buttons); height: 48px; padding: 0 8px 0 16px;
+  font-family: var(--font-mono); font-size: 15px; color: var(--color-ink-charcoal);
+  box-shadow: inset 0 0 0 1px var(--color-soft-mist);
+}
+.copy .prompt { color: var(--color-stone-gray); user-select: none; }
+.copy button {
+  font: 500 13px var(--font-sans); cursor: pointer;
+  background: var(--color-warm-parchment); color: var(--color-ink-charcoal);
+  border: 1px solid var(--color-soft-mist); border-radius: var(--radius-small-buttons);
+  padding: 6px 10px; min-width: 64px;
+}
+.copy button:hover { border-color: var(--color-ink-charcoal); }
+.hero-note { margin-top: 16px; font-size: var(--text-body-sm); color: var(--color-stone-gray); }
+
+/* Floating terminal cards */
+.stack { position: relative; min-height: 420px; }
+.float {
+  background: rgba(255,255,255,.85);
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: var(--radius-cards);
+  padding: 16px;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.float-head { display: flex; align-items: center; gap: 8px; font-size: var(--text-caption); color: var(--color-stone-gray); margin-bottom: 12px; }
+.float-head .chip { margin-left: auto; background: var(--color-lilac-mist); color: var(--color-ink-charcoal); border-radius: var(--radius-pills); padding: 2px 10px; font-weight: 540; }
+.dots { display: flex; gap: 6px; }
+.dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--color-soft-mist); display: block; }
+.term { margin: 0; font-size: 13px; line-height: 1.7; white-space: pre; overflow-x: auto; color: var(--color-ink-charcoal); }
+.term .p { color: var(--color-stone-gray); }
+.term .ok { color: var(--color-deep-lagoon); }
+.term .err { color: var(--color-midnight-wine); font-weight: 500; }
+.term .dim { color: #9a9894; }
+.term .v { color: var(--color-royal-violet); }
+.card-a { position: relative; z-index: 2; width: 92%; }
+.card-b { position: absolute; z-index: 3; right: -8px; bottom: -36px; width: 70%; }
+.card-c { position: absolute; z-index: 1; right: 4%; top: -40px; width: 56%; opacity: .9; }
+
+/* Command strip */
+.strip { background: var(--color-paper-white); border-top: 1px solid var(--color-soft-mist); border-bottom: 1px solid var(--color-soft-mist); }
+.strip-inner { display: grid; grid-template-columns: repeat(6, 1fr); }
+.strip-cell {
+  padding: 24px 12px; text-align: center; font-family: var(--font-mono); font-size: 17px;
+  color: var(--color-ink-charcoal); border-left: 1px solid var(--color-soft-mist);
+}
+.strip-cell:last-child { border-right: 1px solid var(--color-soft-mist); }
+.strip-caption { text-align: center; font-size: var(--text-body-sm); color: var(--color-stone-gray); padding: 32px 0 0; }
+
+/* Sections */
+section.block { padding: 96px 0; }
+.section-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 32px; margin-bottom: 40px; flex-wrap: wrap; }
+.section-head .heading-lg { max-width: 640px; }
+.section-head p { margin: 0; max-width: 420px; color: var(--color-stone-gray); }
+
+/* Tabs */
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--color-paper-white); border: 1px solid var(--color-soft-mist); border-radius: var(--radius-tabs); overflow: hidden; }
+.tab {
+  font: inherit; font-weight: 460; cursor: pointer; text-align: left;
+  background: transparent; color: var(--color-ink-charcoal); border: 0; border-left: 1px solid var(--color-soft-mist);
+  padding: 16px; display: flex; align-items: center; gap: 10px;
+}
+.tab:first-child { border-left: 0; }
+.tab code { font-size: 14px; }
+.tab[aria-selected="true"] { background: var(--color-lilac-mist); }
+.tab svg { width: 18px; height: 18px; flex: none; }
+.tab-panels { margin-top: 16px; }
+.panel { display: grid; grid-template-columns: 1fr 1.35fr; gap: 16px; }
+.panel[hidden] { display: none; }
+.panel-copy { background: var(--color-paper-white); border-radius: var(--radius-cards); padding: 32px; display: flex; flex-direction: column; gap: 16px; }
+.panel-copy h3 { font-size: var(--text-subheading); line-height: 1.3; letter-spacing: -0.014em; }
+.panel-copy p { margin: 0; color: var(--color-stone-gray); }
+.panel-copy ul { margin: 0; padding-left: 18px; color: var(--color-stone-gray); }
+.panel-copy li + li { margin-top: 6px; }
+.panel-copy code, .card code, .lagoon code, .gradient code { font-size: .9em; background: var(--color-warm-parchment); padding: 1px 5px; border-radius: 5px; color: var(--color-ink-charcoal); }
+.panel-term { background: var(--color-paper-white); border: 1px solid var(--color-soft-mist); border-radius: var(--radius-cards); padding: 24px; overflow: hidden; }
+.panel-term .term { font-size: 13px; }
+
+/* Feature cards */
+.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.card { background: var(--color-paper-white); border-radius: var(--radius-cards); padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.card .icon { width: 36px; height: 36px; border-radius: 10px; background: var(--color-lilac-mist); display: grid; place-items: center; margin-bottom: 8px; }
+.card .icon svg { width: 18px; height: 18px; }
+.card h3 { font-size: var(--text-label-bold); font-weight: 700; line-height: 1.3; letter-spacing: -0.008em; }
+.card p { margin: 0; color: var(--color-ink-charcoal); }
+.card a { margin-top: auto; padding-top: 8px; }
+
+/* Dark lagoon band */
+.lagoon { background: var(--color-deep-lagoon); color: var(--color-paper-white); padding: 96px 0; overflow: hidden; }
+.lagoon-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 64px; align-items: center; }
+.collage { position: relative; padding: 32px 0 32px 32px; }
+.collage::before, .collage::after { content: ""; position: absolute; border-radius: var(--radius-cards); }
+.collage::before { inset: 0 18% 22% 0; background: rgba(212,199,255,.35); }
+.collage::after { inset: 30% 0 0 30%; background: rgba(255,196,214,.22); }
+.collage img { position: relative; z-index: 1; border-radius: 12px; border: 1px solid rgba(255,255,255,.2); }
+.collage .script { position: absolute; z-index: 2; left: 0; bottom: -4px; font-family: "Segoe Script", "Bradley Hand", "Snell Roundhand", cursive; font-size: 26px; color: var(--color-lilac-mist); transform: rotate(-4deg); }
+.lagoon h2 { margin-bottom: 24px; }
+.lagoon p { color: rgba(255,255,255,.8); margin: 0 0 16px; }
+.lagoon code { background: rgba(255,255,255,.12); color: #fff; }
+.keys { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 32px; }
+kbd { font-size: 12px; border: 1px solid rgba(255,255,255,.35); border-radius: 6px; padding: 3px 8px; color: #fff; }
+.keys span { font-size: var(--text-body-sm); color: rgba(255,255,255,.7); margin-right: 8px; }
+
+/* Gradient banner */
+.gradient {
+  background:
+    radial-gradient(40% 80% at 68% 50%, rgba(113,76,182,.45), transparent 70%),
+    radial-gradient(30% 80% at 93% 50%, rgba(90,140,255,.45), transparent 70%),
+    radial-gradient(50% 60% at 50% 98%, rgba(255,150,190,.5), transparent 70%),
+    radial-gradient(40% 60% at 50% 75%, rgba(120,220,230,.4), transparent 70%),
+    var(--color-warm-parchment);
+  padding: 96px 0;
+}
+.gradient-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+.gradient h2 { margin-bottom: 20px; }
+.gradient p { color: var(--color-ink-charcoal); max-width: 480px; margin: 0 0 32px; }
+.gradient .float .term { font-size: 13px; }
+
+/* Footer */
+footer { background: var(--color-midnight-wine); color: var(--color-paper-white); padding: 64px 0; }
+.foot-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 32px; }
+footer h4 { font-size: var(--text-body-sm); font-weight: 700; margin: 0 0 16px; }
+footer ul { list-style: none; margin: 0; padding: 0; }
+footer li + li { margin-top: 12px; }
+footer a { color: rgba(255,255,255,.7); font-size: var(--text-body-sm); }
+footer a:hover { color: #fff; }
+footer .brand { color: #fff; margin-bottom: 16px; }
+footer .brand .rec-dot { background: var(--color-lilac-mist); box-shadow: 0 0 0 4px rgba(212,199,255,.18); }
+footer p { color: rgba(255,255,255,.7); font-size: var(--text-body-sm); margin: 0; max-width: 320px; }
+.foot-bottom { margin-top: 48px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,.12); font-size: var(--text-caption); color: rgba(255,255,255,.55); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+
+.hero-grid > *, .lagoon-grid > *, .gradient-grid > *, .panel > *, .cards > * { min-width: 0; }
+
+/* Responsive */
+@media (max-width: 1000px) {
+  .cards { grid-template-columns: repeat(2, 1fr); }
+  .panel { grid-template-columns: 1fr; }
+  .foot-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 900px) {
+  :root { --text-display: 48px; --text-heading-lg: 38px; }
+  .nav { display: none; }
+  .hero { padding: 64px 0 96px; }
+  .hero-grid, .lagoon-grid, .gradient-grid { grid-template-columns: 1fr; gap: 48px; }
+  .stack { min-height: 0; }
+  .card-c { display: none; }
+  .card-a { width: 100%; }
+  .card-b { position: relative; right: auto; bottom: auto; width: 88%; margin: -24px 0 0 auto; }
+  .strip-inner { grid-template-columns: repeat(3, 1fr); }
+  .strip-cell:nth-child(3n) { border-right: 1px solid var(--color-soft-mist); }
+  .strip-cell:nth-child(n+4) { border-top: 1px solid var(--color-soft-mist); }
+  section.block, .lagoon, .gradient { padding: 64px 0; }
+}
+@media (max-width: 600px) {
+  :root { --text-display: 40px; --gutter: 16px; }
+  .tabs { grid-template-columns: repeat(2, 1fr); }
+  .tab:nth-child(3) { border-left: 0; }
+  .tab:nth-child(n+3) { border-top: 1px solid var(--color-soft-mist); }
+  .cards, .foot-grid { grid-template-columns: 1fr; }
+  .copy { font-size: 13px; width: 100%; justify-content: space-between; }
+  .copy code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .header-actions .ghost { display: none; }
+  .panel-copy { padding: 24px; }
+}
+</style>
+</head>
+<body>
+
+<div class="announce">
+  <span>New: <code>binrec play --ui</code> replays any session in your browser, with a timeline you can scrub.</span>
+  <a href="#play-ui">See it</a>
+</div>
+
+<header class="header" id="top">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="binrec home"><span class="rec-dot" aria-hidden="true"></span>binrec</a>
+    <nav class="nav" aria-label="Main">
+      <a href="#how">How it works</a>
+      <a href="#cli">CLI</a>
+      <a href="#play-ui">Player</a>
+      <a href="#library">Library</a>
+    </nav>
+    <div class="header-actions">
+      <a class="ghost" href="https://www.npmjs.com/package/@jondotsoy/binrec">npm</a>
+      <a class="btn btn-lilac" href="https://github.com/JonDotsoy/binrec">GitHub</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow">Open source · MIT · Runs on Bun</p>
+        <h1 class="display">Record everything a command <em>reads and writes.</em></h1>
+        <p class="lead">binrec puts a small shim in front of any binary on your <code>PATH</code>. The program runs exactly as before, and every argument, every chunk of input and output, and the exit code land in an ndjson file you can replay later.</p>
+        <div class="install">
+          <a class="btn btn-primary" href="#cli">Get started
+            <svg class="arrow" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+          </a>
+          <div class="copy">
+            <code><span class="prompt">$ </span><span id="install-cmd">bunx @jondotsoy/binrec install date</span></code>
+            <button type="button" data-copy="#install-cmd">Copy</button>
+          </div>
+        </div>
+        <p class="hero-note">Requires <a href="https://bun.sh">Bun</a>. Or install it globally with <code>bun add -g @jondotsoy/binrec</code>.</p>
+      </div>
+
+      <div class="stack" aria-hidden="true">
+        <div class="float card-c">
+          <div class="float-head"><div class="dots"><i></i><i></i><i></i></div>~/.binrec/records</div>
+<pre class="term"><span class="dim">{"type":"command",…,"command":"/usr/bin/date"}</span>
+<span class="dim">{"type":"stdout","size":11,"data":"2026-10-18\n"}</span>
+<span class="dim">{"type":"end","exitCode":0,"total":11}</span></pre>
+        </div>
+        <div class="float card-a">
+          <div class="float-head"><div class="dots"><i></i><i></i><i></i></div>zsh<span class="chip">recording</span></div>
+<pre class="term"><span class="p">$</span> binrec install date
+Installed <span class="v">/home/you/.binrec/bin/date</span>
+<span class="p">$</span> date +%F
+2026-10-18
+<span class="p">$</span> binrec list date
+<span class="dim">ID         STARTED               EXIT  SIZE  COMMAND</span>
+8969d708…  2026-10-18T04:05:14Z     <span class="ok">0</span>  11 B  /usr/bin/date +%F</pre>
+        </div>
+        <div class="float card-b">
+          <div class="float-head"><div class="dots"><i></i><i></i><i></i></div>binrec play -t e531b87f</div>
+<pre class="term"><span class="dim">+0.000s</span>  <span class="p">$</span>       /usr/bin/sh -c '…'
+<span class="dim">+0.005s</span>  stdout  building...
+<span class="dim">+1.202s</span>  <span class="err">stderr</span>  warning: unused variable
+<span class="dim">+2.004s</span>  stdout  done in 2.0s
+<span class="dim">+2.004s</span>  exit    <span class="ok">0</span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="strip">
+    <p class="strip-caption">Any binary on your PATH, unchanged: same output, same exit code.</p>
+    <div class="wrap">
+      <div class="strip-inner" style="margin-top:24px">
+        <div class="strip-cell">date</div>
+        <div class="strip-cell">git</div>
+        <div class="strip-cell">docker</div>
+        <div class="strip-cell">vim</div>
+        <div class="strip-cell">curl</div>
+        <div class="strip-cell">top</div>
+      </div>
+    </div>
+  </div>
+
+  <section class="block" id="how">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">How it works</p>
+          <h2 class="heading-lg">A shim in front, the real program behind.</h2>
+        </div>
+        <p><code>binrec install date</code> resolves <code>/usr/bin/date</code> and writes <code>~/.binrec/bin/date</code>. Put that folder first in your <code>PATH</code> and every call is recorded.</p>
+      </div>
+      <div class="cards">
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 20 20" fill="none" stroke="#292827" stroke-width="1.5" aria-hidden="true"><path d="M3 10h14M12 5l5 5-5 5"/></svg></div>
+          <h3>Transparent passthrough</h3>
+          <p>stdin, stdout and stderr go straight to the real binary. Interactive programs get their own pseudo terminal, so <code>vim</code> and <code>docker exec -it</code> just work.</p>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 20 20" fill="none" stroke="#292827" stroke-width="1.5" aria-hidden="true"><path d="M5 3h7l3 3v11H5z"/><path d="M8 9h4M8 12h4"/></svg></div>
+          <h3>One ndjson per session</h3>
+          <p>Arguments, pid, every chunk with its byte size and timing, resizes, signals and the exit code. Binary chunks are kept as base64, so nothing is lost.</p>
+          <a href="https://github.com/JonDotsoy/binrec#record-format">Record format</a>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 20 20" fill="none" stroke="#292827" stroke-width="1.5" aria-hidden="true"><rect x="4" y="9" width="12" height="8" rx="2"/><path d="M7 9V6a3 3 0 0 1 6 0v3"/></svg></div>
+          <h3>Private by default</h3>
+          <p>Records can hold secrets, so files are created with mode <code>0600</code> and the records folder with <code>0700</code>, whatever your umask.</p>
+          <a href="https://github.com/JonDotsoy/binrec/blob/develop/SECURITY.md">Security</a>
+        </article>
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 20 20" fill="none" stroke="#292827" stroke-width="1.5" aria-hidden="true"><path d="M10 3v7l4 2"/><circle cx="10" cy="10" r="7"/></svg></div>
+          <h3>Turn it off any time</h3>
+          <p><code>binrec off</code> stops recording for every shim without removing them. <code>binrec on</code> brings it back.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="cli" style="padding-top:0">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">The CLI</p>
+          <h2 class="heading-lg">Install, list, play, measure.</h2>
+        </div>
+        <p>Four commands cover the whole loop, from putting a shim in place to replaying exactly what happened.</p>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="binrec commands">
+        <button class="tab" role="tab" id="tab-install" aria-controls="panel-install" aria-selected="true">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10 3v10M6 9l4 4 4-4M4 17h12"/></svg><code>install</code>
+        </button>
+        <button class="tab" role="tab" id="tab-list" aria-controls="panel-list" aria-selected="false" tabindex="-1">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 5h12M4 10h12M4 15h8"/></svg><code>list</code>
+        </button>
+        <button class="tab" role="tab" id="tab-play" aria-controls="panel-play" aria-selected="false" tabindex="-1">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M6 4l10 6-10 6z"/></svg><code>play</code>
+        </button>
+        <button class="tab" role="tab" id="tab-stats" aria-controls="panel-stats" aria-selected="false" tabindex="-1">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 16V9M10 16V4M16 16v-5"/></svg><code>stats</code>
+        </button>
+      </div>
+
+      <div class="tab-panels">
+        <div class="panel" role="tabpanel" id="panel-install" aria-labelledby="tab-install">
+          <div class="panel-copy">
+            <h3>Put a shim in front of any binary</h3>
+            <p><code>binrec install</code> creates <code>~/.binrec/bin</code> and prints the <code>PATH</code> line for your shell. <code>binrec install &lt;bin&gt;</code> adds a shim for one command.</p>
+            <ul>
+              <li><code>binrec uninstall &lt;bin&gt;</code> removes it. Records are kept.</li>
+              <li><code>binrec rec /usr/bin/date +%F</code> records a single run without a shim.</li>
+              <li>Set <code>BINREC_HOME</code> to keep everything somewhere else.</li>
+            </ul>
+          </div>
+          <div class="panel-term">
+<pre class="term"><span class="p">$</span> bunx @jondotsoy/binrec install date
+Installed <span class="v">/home/you/.binrec/bin/date</span>
+
+<span class="dim"># put the shims first in PATH</span>
+<span class="p">$</span> export PATH="$HOME/.binrec/bin:$PATH"
+
+<span class="p">$</span> date +%F
+2026-10-18
+<span class="dim"># recorded in ~/.binrec/records/&lt;sessionId&gt;.ndjson</span></pre>
+          </div>
+        </div>
+
+        <div class="panel" role="tabpanel" id="panel-list" aria-labelledby="tab-list" hidden>
+          <div class="panel-copy">
+            <h3>Every session, oldest first</h3>
+            <p><code>binrec list</code> shows the id, start time, exit code, size and command line of every recorded session. Pass a binary to see only its sessions.</p>
+            <ul>
+              <li>The start of an id is enough for <code>play</code> when it matches one session.</li>
+            </ul>
+          </div>
+          <div class="panel-term">
+<pre class="term"><span class="p">$</span> binrec list
+<span class="dim">ID                                    STARTED               EXIT  SIZE  COMMAND</span>
+e531b87f-3f0c-4b7e-9a51-2c8d0f6a4e21  2026-10-18T16:31:43Z     <span class="ok">0</span>  50 B  /usr/bin/sh -c …
+8969d708-1c2e-4f0a-b6d1-5e0c7a9b3f12  2026-10-18T04:05:14Z     <span class="ok">0</span>  11 B  /usr/bin/date +%F</pre>
+          </div>
+        </div>
+
+        <div class="panel" role="tabpanel" id="panel-play" aria-labelledby="tab-play" hidden>
+          <div class="panel-copy">
+            <h3>Replay it with the original timing</h3>
+            <p><code>binrec play &lt;id&gt;</code> writes stdout and stderr again, each chunk as long after the start as it was recorded. Streams stay apart, so <code>2&gt;/dev/null</code> works.</p>
+            <ul>
+              <li><code>-t</code> shows each line's timestamp, elapsed time and stream.</li>
+              <li><code>-n</code> writes everything at once. <code>--speed 4</code> plays four times faster.</li>
+              <li><code>--ui</code> opens the <a href="#play-ui">browser player</a>.</li>
+            </ul>
+          </div>
+          <div class="panel-term">
+<pre class="term"><span class="p">$</span> binrec play -t e531b87f
+<span class="dim">16:31:43.597Z</span>  +0.000s  <span class="p">$</span>       /usr/bin/sh -c '…'
+<span class="dim">16:31:43.602Z</span>  +0.005s  stdout  building...
+<span class="dim">16:31:44.800Z</span>  +1.202s  <span class="err">stderr</span>  warning: unused variable
+<span class="dim">16:31:45.602Z</span>  +2.004s  stdout  done in 2.0s
+<span class="dim">16:31:45.603Z</span>  +2.004s  exit    <span class="ok">0</span></pre>
+          </div>
+        </div>
+
+        <div class="panel" role="tabpanel" id="panel-stats" aria-labelledby="tab-stats" hidden>
+          <div class="panel-copy">
+            <h3>See what consumed the most</h3>
+            <p><code>binrec stats</code> counts the recorded sessions, the bytes they consumed and ranks the commands. It reads one small stats file per session instead of every record.</p>
+          </div>
+          <div class="panel-term">
+<pre class="term"><span class="p">$</span> binrec stats
+Sessions: 3
+Consumed: 17.4 KB (17825 bytes)
+
+Commands that consumed the most:
+  1. /usr/bin/cat   17.4 KB  2 sessions
+  2. /usr/bin/date     29 B  1 session</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="lagoon" id="play-ui">
+    <div class="wrap lagoon-grid">
+      <div class="collage">
+        <img src="play-ui.gif" alt="binrec play --ui scrubbing the timeline of a recorded session" width="800" height="500" loading="lazy" decoding="async">
+        <span class="script" aria-hidden="true">rewind anything</span>
+      </div>
+      <div>
+        <p class="eyebrow" style="color:rgba(255,255,255,.7)">binrec play --ui</p>
+        <h2 class="display">Scrub through a session.</h2>
+        <p style="margin-top:24px">The session plays in an <a href="https://xtermjs.org" style="color:#fff;text-decoration-line:underline;text-decoration-color:rgba(255,255,255,.4)">xterm.js</a> terminal at the size it was recorded, so colors, cursor moves and full screen programs look as they did. Every output is a tick on the timeline, taller for more bytes.</p>
+        <p>It listens only on <code>127.0.0.1</code> and serves everything itself, so it works offline.</p>
+        <div class="keys">
+          <span>Keys</span><kbd>Space</kbd><kbd>,</kbd><kbd>.</kbd><kbd>←</kbd><kbd>→</kbd><kbd>Home</kbd><kbd>End</kbd>
+        </div>
+        <a class="btn btn-outline-white" href="https://github.com/JonDotsoy/binrec#play-in-the-browser">Read how it works</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="gradient" id="library">
+    <div class="wrap gradient-grid">
+      <div>
+        <p class="eyebrow" style="color:var(--color-ink-charcoal)">Library</p>
+        <h2 class="heading-lg">Check in your tests exactly how your code called a tool.</h2>
+        <p>Create an instance, install a shim, run your code with it on the <code>PATH</code> and read the last session back: its arguments, its exit code and every line it wrote.</p>
+        <a class="btn btn-white" href="https://github.com/JonDotsoy/binrec#library">Read the API
+          <svg class="arrow" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+        </a>
+      </div>
+      <div class="float">
+        <div class="float-head"><div class="dots"><i></i><i></i><i></i></div>date.test.ts</div>
+<pre class="term"><span class="v">import</span> { $ } <span class="v">from</span> "bun";
+<span class="v">import</span> { binrec } <span class="v">from</span> "@jondotsoy/binrec";
+
+<span class="v">const</span> b = binrec.create({ path: "/tmp/my-bin" });
+<span class="v">await</span> b.install("date");
+
+<span class="v">await</span> $`date +%F`.env({
+  ...process.env,
+  PATH: `${b.path}:${process.env.PATH}`,
+});
+
+<span class="v">const</span> session = <span class="v">await</span> b.lastSession("date");
+session?.args;     <span class="dim">// ["+%F"]</span>
+session?.exitCode; <span class="dim">// 0</span></pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <a class="brand" href="#top"><span class="rec-dot" aria-hidden="true"></span>binrec</a>
+        <p>Record everything a command reads and writes.</p>
+      </div>
+      <div>
+        <h4>Docs</h4>
+        <ul>
+          <li><a href="https://github.com/JonDotsoy/binrec#cli">CLI</a></li>
+          <li><a href="https://github.com/JonDotsoy/binrec#record-format">Record format</a></li>
+          <li><a href="https://github.com/JonDotsoy/binrec#library">Library</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/JonDotsoy/binrec">GitHub</a></li>
+          <li><a href="https://www.npmjs.com/package/@jondotsoy/binrec">npm</a></li>
+          <li><a href="https://github.com/JonDotsoy/binrec/releases">Releases</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="https://github.com/JonDotsoy/binrec/blob/develop/LICENSE">MIT License</a></li>
+          <li><a href="https://github.com/JonDotsoy/binrec/blob/develop/SECURITY.md">Security</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© Jonathan Delgado · <a href="https://jon.soy">jon.soy</a></span>
+      <span>Made with Bun</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const header = document.querySelector(".header");
+  const onScroll = () => header.classList.toggle("scrolled", window.scrollY > 8);
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  for (const button of document.querySelectorAll("[data-copy]")) {
+    button.addEventListener("click", async () => {
+      const text = document.querySelector(button.dataset.copy).textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Press ⌘C";
+      }
+      setTimeout(() => (button.textContent = "Copy"), 1600);
+    });
+  }
+
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  const select = (tab) => {
+    for (const t of tabs) {
+      const on = t === tab;
+      t.setAttribute("aria-selected", on);
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+    }
+  };
+  tabs.forEach((tab, i) => {
+    tab.addEventListener("click", () => select(tab));
+    tab.addEventListener("keydown", (e) => {
+      const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (!step) return;
+      const next = tabs[(i + step + tabs.length) % tabs.length];
+      select(next);
+      next.focus();
+    });
+  });
+</script>
+</body>
+</html>
