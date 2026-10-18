@@ -6,6 +6,7 @@ import { play, type PlayOptions } from "./play.ts";
 import { playUi, type PlayUiOptions, type PlayUiServer } from "./ui/server.ts";
 import { findSession, lastSession, sessions, type Session } from "./sessions.ts";
 import { stats, type Stats } from "./stats.ts";
+import { shellLines } from "./shell.ts";
 
 export { rec } from "./rec.ts";
 export { play } from "./play.ts";
@@ -32,6 +33,11 @@ export type Binrec = {
   readonly config: string;
   /** Creates the bin folder if it does not exist yet. */
   init(): Promise<void>;
+  /**
+   * The `export` lines to add to `~/.bashrc` so the bin folder comes first in PATH
+   * (and `BINREC_HOME` is set when it is not the default). Nothing is written.
+   */
+  shellLines(): string[];
   /** Installs a shim for `command` and returns the shim's path. */
   install(command: string): Promise<string>;
   /**
@@ -180,6 +186,7 @@ const create = (options: CreateOptions = {}): Binrec => {
     records,
     config,
     init,
+    shellLines: () => shellLines(path),
     install,
     uninstall,
     uninstallAll,

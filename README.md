@@ -17,11 +17,13 @@ bun add @jondotsoy/binrec      # the library
 
 ## CLI
 
-Create the shim folder (`~/.binrec/bin`) and see how to add it to your `PATH`:
+Create the shim folder (`~/.binrec/bin`) and see the lines to add to `~/.bashrc` so it comes first in your `PATH`:
 
 ```sh
-binrec install
+binrec init
 ```
+
+`binrec init` does not change any file: copy the `export` lines it prints into `~/.bashrc` (or your shell's startup file) and reload it with `source ~/.bashrc`. When `BINREC_HOME` is not the default `~/.binrec`, it prints an `export BINREC_HOME=…` line too. `binrec install` without a binary does the same.
 
 Install a shim for a binary:
 
@@ -31,7 +33,7 @@ binrec install date
 
 `binrec` resolves the real path (for example `/usr/bin/date`) and writes an executable `~/.binrec/bin/date` that runs `binrec rec /usr/bin/date "$@"`.
 
-For the shim to take over, its folder must come **before** the real binary in `PATH`:
+For the shim to take over, its folder must come **before** the real binary in `PATH` (this is the line `binrec init` adds):
 
 ```sh
 export PATH="$HOME/.binrec/bin:$PATH"
@@ -48,7 +50,7 @@ binrec rec --records ./records /usr/bin/date +%F
 
 | Command | What it does |
 | --- | --- |
-| `binrec install` | Creates the shim folder and prints the `PATH` line for `~/.bashrc`. |
+| `binrec init` | Creates the shim folder and prints the `export` lines to add to `~/.bashrc`: `PATH` with the shim folder first, and `BINREC_HOME` when it is not the default. It does not change any file. `binrec install` without a binary is the same. |
 | `binrec install <bin>` | Installs a shim for `<bin>`. |
 | `binrec uninstall <bin>` | Removes the shim for `<bin>`. Its recorded sessions are kept. |
 | `binrec uninstall --all` | Removes every shim in the shim folder. Recorded sessions are kept. |
@@ -196,6 +198,7 @@ session?.lines;    // every ndjson line of the session
 | `binrec.create({ path?, records? })` | Creates an instance. `path` is the shim folder (default `~/.binrec/bin`), `records` the records folder (default `records` next to `path`). |
 | `b.path`, `b.records`, `b.config` | Absolute paths of the shim folder, the records folder and `config.json`. |
 | `b.init()` | Creates the shim folder. |
+| `b.shellLines()` | The `export` lines `binrec init` prints, as an array of strings. Nothing is written. |
 | `b.install(command)` | Installs a shim for `command` and returns its path. Throws if the command is not found. |
 | `b.uninstall(command)` | Removes the shim for `command` and returns its path, or `null` if there was none. Only removes files binrec wrote; records are kept. |
 | `b.uninstallAll()` | Removes every binrec shim in the shim folder and returns their paths. Other files are left alone. |
