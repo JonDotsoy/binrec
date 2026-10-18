@@ -23,6 +23,7 @@ export const page = `<!doctype html>
     <canvas></canvas>
     <div id="tooltip" hidden></div>
   </div>
+  <ol id="nested" hidden aria-label="Sessions that ran inside this one"></ol>
   <div class="controls">
     <button id="prev" title="Previous change ( , )" aria-label="Previous change">&#x23EE;</button>
     <button id="play" title="Play / pause (Space)" aria-label="Play">&#x25B6;</button>
@@ -48,6 +49,7 @@ export const style = `
   color-scheme: dark;
   --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e;
   --accent: #58a6ff; --change: #3fb950; --stderr: #f85149; --played: rgba(88, 166, 255, 0.18);
+  --nested: #d2a8ff;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
@@ -90,6 +92,19 @@ footer { border-top: 1px solid var(--border); background: var(--panel); padding:
 .spacer { flex: 1; }
 label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
 select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 3px 4px; }
+#nested {
+  list-style: none; margin: 6px 0 0; padding: 0; max-height: 120px; overflow: auto;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+#nested button {
+  display: flex; gap: 8px; width: 100%; padding: 1px 6px; border: 0; border-radius: 4px;
+  background: none; color: var(--muted); font: inherit; text-align: left; cursor: pointer;
+}
+#nested button:hover { background: var(--bg); }
+#nested button.active { color: var(--text); background: rgba(210, 168, 255, 0.12); }
+#nested .name { color: var(--nested); white-space: nowrap; }
+#nested .line { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#nested .at { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .hint { margin: 6px 0 0; color: var(--muted); font-size: 11px; }
 `;
 
@@ -98,9 +113,14 @@ export function player() {
   type Resize = { t: number; type: "resize"; cols: number; rows: number };
   type Event = Output | Resize;
   type Change = { start: number; end: number; bytes: number; stderr: boolean };
+  type Nested = {
+    sessionId: string; command: string; args: string[]; depth: number; exitCode: number | null;
+    start: number; end: number;
+  };
   type UiSession = {
     sessionId: string; command: string; args: string[]; timestamp: string; exitCode: number | null;
     duration: number; cols: number; rows: number; tty: boolean; speed: number; events: Event[];
+    nested?: Nested[];
   };
 
   /** Outputs closer than this (ms) are one change on the timeline. */
@@ -131,7 +151,8 @@ export function player() {
     const events: Event[] = session.events.map((event) =>
       event.type === "resize" ? event : { ...event, bytes: decode(event.data) },
     );
-    const duration = Math.max(session.duration, events.at(-1)?.t ?? 0);
+    const nested = session.nested ?? [];
+    const duration = Math.max(session.duration, events.at(-1)?.t ?? 0, ...nested.map((inner) => inner.end));
 
     // Header.
     byId("command").textContent = [session.command, ...session.args].map(quote).join(" ");
@@ -232,6 +253,29 @@ export function player() {
       flush();
     };
 
+    // Sessions that ran inside this one: a row each, to jump to its start.
+    const nestedList = byId("nested");
+    const nestedRows = nested.map((inner) => {
+      const row = document.createElement("li");
+      const button = document.createElement("button");
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = `${"\u00a0\u00a0".repeat(inner.depth - 1)}└ ${inner.command.split("/").at(-1)}[${inner.sessionId.slice(0, 8)}]`;
+      const line = document.createElement("span");
+      line.className = "line";
+      line.textContent = [inner.command, ...inner.args].map(quote).join(" ");
+      const at = document.createElement("span");
+      at.className = "at";
+      at.textContent = `${formatTime(inner.start)} · ${inner.exitCode === null ? "running" : `exit ${inner.exitCode}`}`;
+      button.append(name, line, at);
+      button.title = line.textContent;
+      button.addEventListener("click", () => seek(inner.start));
+      row.append(button);
+      nestedList.append(row);
+      return button;
+    });
+    nestedList.hidden = nested.length === 0;
+
     // Clock.
     let current = 0;
     let playing = false;
@@ -330,6 +374,15 @@ export function player() {
         ctx.fillRect(Math.round(x(output.t)) - 1, (height - tick) / 2, 2, tick);
       }
       ctx.globalAlpha = 1;
+
+      // A line along the top for every nested session, while it ran.
+      ctx.fillStyle = color("--nested");
+      for (const inner of nested) {
+        ctx.fillRect(x(inner.start), 1, Math.max(2, x(inner.end) - x(inner.start)), 3);
+      }
+      nested.forEach((inner, index) => {
+        nestedRows[index]!.classList.toggle("active", inner.start <= current && current <= inner.end);
+      });
 
       if (hover !== null) {
         ctx.fillStyle = color("--muted");

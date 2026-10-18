@@ -119,7 +119,7 @@ test("binrec play --ui fails for an unknown session or a bad --port", async () =
 
 test("binrec play --help shows --ui", async () => {
   const help = await $`bun ${binrec} play --help`.env(env).text();
-  expect(help).toContain("binrec play --ui [--port <n>] [--speed <n>] <id>");
+  expect(help).toContain("binrec play --ui [--port <n>] [--speed <n>] [--tree] <id>");
   expect(help).toContain("--port <n>");
 });
 
@@ -128,6 +128,7 @@ test("uiSession takes the terminal size from the first resize and keeps later on
     sessionId: "s",
     command: "/usr/bin/top",
     args: [],
+    parent: null,
     timestamp: "2026-10-18T00:00:00.000Z",
     exitCode: 0,
     total: 4,

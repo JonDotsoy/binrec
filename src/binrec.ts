@@ -2,19 +2,20 @@ import { mkdir, chmod, readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { DISABLED_MARKER, readConfig, type Config, rec } from "./rec.ts";
-import { play, type PlayOptions } from "./play.ts";
+import { play, playTree, type PlayOptions } from "./play.ts";
 import { playUi, type PlayUiOptions, type PlayUiServer } from "./ui/server.ts";
-import { findSession, lastSession, sessions, type Session } from "./sessions.ts";
+import { findSession, lastSession, sessionTree, sessions, type Session, type TreeSession } from "./sessions.ts";
 import { stats, type Stats } from "./stats.ts";
 import { shellLines } from "./shell.ts";
 
 export { rec } from "./rec.ts";
-export { play } from "./play.ts";
+export { play, playTree } from "./play.ts";
 export type { PlayOptions } from "./play.ts";
 export { playUi } from "./ui/server.ts";
 export type { PlayUiOptions, PlayUiServer } from "./ui/server.ts";
 export type { Config, RecOptions, RecResult } from "./rec.ts";
-export type { RecordLine, Session } from "./sessions.ts";
+export { asTrees, sessionTree } from "./sessions.ts";
+export type { RecordLine, Session, TreeSession } from "./sessions.ts";
 export type { CommandStats, Stats } from "./stats.ts";
 
 export type CreateOptions = {
@@ -67,13 +68,23 @@ export type Binrec = {
    * Throws when the id matches more than one session.
    */
   session(id: string): Promise<Session | null>;
-  /** Writes the `stdout` and `stderr` of the session `id` again with its recorded timing. */
-  play(id: string, options?: PlayOptions): Promise<void>;
+  /**
+   * The session `id` followed by every session that ran inside it, at any depth,
+   * like the commands run from a recorded shell. Empty when there is no such session.
+   */
+  sessionTree(id: string): Promise<TreeSession[]>;
+  /**
+   * Writes the `stdout` and `stderr` of the session `id` again with its recorded
+   * timing. With `tree`, plays the sessions that ran inside it too, every line
+   * labeled with its session (see `playTree`).
+   */
+  play(id: string, options?: PlayOptions & { tree?: boolean }): Promise<void>;
   /**
    * Serves a page on 127.0.0.1 that plays the session `id` in a terminal in the
-   * browser, with a timeline to pause, rewind and fast-forward it.
+   * browser, with a timeline to pause, rewind and fast-forward it. With `tree`,
+   * the page also lists the sessions that ran inside it and marks them on the timeline.
    */
-  playUi(id: string, options?: PlayUiOptions): Promise<PlayUiServer>;
+  playUi(id: string, options?: Omit<PlayUiOptions, "nested"> & { tree?: boolean }): Promise<PlayUiServer>;
   /** The most recent recorded session of `command`, or `null` if there is none. */
   lastSession(command: string): Promise<Session | null>;
   /** Bytes consumed by every recorded session, overall and per command (most first). */
@@ -197,15 +208,18 @@ const create = (options: CreateOptions = {}): Binrec => {
     isRecording,
     sessions: (command) => sessions(records, command),
     session: (id) => findSession(records, id),
-    play: async (id, options) => {
-      const session = await findSession(records, id);
+    sessionTree: (id) => sessionTree(records, id),
+    play: async (id, { tree, ...options } = {}) => {
+      const sessions = tree ? await sessionTree(records, id) : [];
+      const session = tree ? sessions[0]?.session : await findSession(records, id);
       if (!session) throw new Error(`binrec: no recorded session ${id} in ${records}`);
-      await play(session, options);
+      await (tree ? playTree(sessions, options) : play(session, options));
     },
-    playUi: async (id, options) => {
-      const session = await findSession(records, id);
+    playUi: async (id, { tree, ...options } = {}) => {
+      const sessions = tree ? await sessionTree(records, id) : [];
+      const session = tree ? sessions[0]?.session : await findSession(records, id);
       if (!session) throw new Error(`binrec: no recorded session ${id} in ${records}`);
-      return playUi(session, options);
+      return playUi(session, { ...options, nested: sessions.slice(1) });
     },
     lastSession: (command) => lastSession(records, command),
     stats: () => stats(records),

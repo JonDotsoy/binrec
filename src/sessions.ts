@@ -11,6 +11,8 @@ export type RecordLine =
       args: string[];
       /** Process id of the recorded program. Missing in older records. */
       pid?: number;
+      /** Id of the session this one ran inside, like a command run from a recorded shell. */
+      parent?: string;
     }
   | {
       type: "stdin" | "stdout" | "stderr";
@@ -52,6 +54,8 @@ export type Session = {
   /** Absolute path of the recorded binary. */
   command: string;
   args: string[];
+  /** Id of the session this one ran inside, or `null` when it was not run from a recorded session. */
+  parent: string | null;
   /** When the session started (ISO 8601). */
   timestamp: string;
   /** Exit code from the `end` line, or `null` if the session has not ended. */
@@ -96,6 +100,7 @@ export const readSession = async (recordPath: string): Promise<Session | null> =
     sessionId: first.sessionId,
     command: first.command,
     args: first.args,
+    parent: first.parent ?? null,
     timestamp: first.timestamp,
     exitCode: end?.type === "end" ? end.exitCode : null,
     total,
@@ -165,4 +170,46 @@ export const findSession = async (records: string, id: string): Promise<Session 
   }
   if (files.length === 0) return null;
   return readSession(join(records, files[0]!)).catch(() => null); // unreadable record
+};
+
+/** A session with how deep it is nested in the tree: `0` for the root, `1` for its children. */
+export type TreeSession = { session: Session; depth: number };
+
+/** Every session of `found` followed by the sessions that ran inside it, starting from `roots`. */
+const walk = (found: Session[], roots: Session[]): TreeSession[] => {
+  const children = new Map<string, Session[]>();
+  for (const session of found) {
+    if (session.parent === null) continue;
+    children.set(session.parent, [...(children.get(session.parent) ?? []), session]);
+  }
+  const ordered: TreeSession[] = [];
+  const visited = new Set<string>();
+  const visit = (session: Session, depth: number) => {
+    if (visited.has(session.sessionId)) return; // a record that names itself, or a loop
+    visited.add(session.sessionId);
+    ordered.push({ session, depth });
+    for (const child of children.get(session.sessionId) ?? []) visit(child, depth + 1);
+  };
+  for (const root of roots) visit(root, 0);
+  return ordered;
+};
+
+/**
+ * Orders `found` (oldest first) as trees: every session is followed by the
+ * sessions that ran inside it. A session whose parent is not in `found` is a root.
+ */
+export const asTrees = (found: Session[]): TreeSession[] => {
+  const ids = new Set(found.map((session) => session.sessionId));
+  return walk(found, found.filter((session) => session.parent === null || !ids.has(session.parent)));
+};
+
+/**
+ * The session whose id is `id` (or starts with it) followed by every session
+ * that ran inside it, at any depth, oldest first under each parent. Returns an
+ * empty list when there is no such session and throws when the id is ambiguous.
+ */
+export const sessionTree = async (records: string, id: string): Promise<TreeSession[]> => {
+  const root = await findSession(records, id);
+  if (!root) return [];
+  return walk(await sessions(records), [root]);
 };

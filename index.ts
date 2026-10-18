@@ -1,6 +1,6 @@
 import { runCli } from "./src/cli.ts";
 
-export { binrec, rec, play, playUi, defaultPath } from "./src/binrec.ts";
+export { binrec, rec, play, playTree, playUi, asTrees, sessionTree, defaultPath } from "./src/binrec.ts";
 export type {
   Binrec,
   PlayOptions,
@@ -12,6 +12,7 @@ export type {
   RecResult,
   RecordLine,
   Session,
+  TreeSession,
   Stats,
 } from "./src/binrec.ts";
 

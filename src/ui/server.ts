@@ -3,7 +3,7 @@
 // @ts-ignore: tsc does not load JavaScript from node_modules, so it has no type for the text import
 import xtermJs from "@xterm/xterm/lib/xterm.js" with { type: "text" };
 import xtermCss from "@xterm/xterm/css/xterm.css" with { type: "text" };
-import type { Session } from "../sessions.ts";
+import type { Session, TreeSession } from "../sessions.ts";
 import { page, player, style } from "./player.ts";
 
 export type PlayUiOptions = {
@@ -11,6 +11,11 @@ export type PlayUiOptions = {
   port?: number;
   /** Playback speed the page starts with. Defaults to `1`. */
   speed?: number;
+  /**
+   * Sessions that ran inside the played one, as `sessionTree` returns them after
+   * the root: the page lists them and marks them on the timeline.
+   */
+  nested?: TreeSession[];
 };
 
 export type PlayUiServer = {
@@ -39,10 +44,20 @@ export type UiSession = {
     | { t: number; type: "stdout" | "stderr"; data: string }
     | { t: number; type: "resize"; cols: number; rows: number }
   )[];
+  /** Sessions that ran inside this one, in tree order; `start` and `end` are ms since this session started. */
+  nested: {
+    sessionId: string;
+    command: string;
+    args: string[];
+    depth: number;
+    exitCode: number | null;
+    start: number;
+    end: number;
+  }[];
 };
 
 /** Turns a session into what the page plays: output and resizes with times relative to the start. */
-export const uiSession = (session: Session, speed = 1): UiSession => {
+export const uiSession = (session: Session, speed = 1, nested: TreeSession[] = []): UiSession => {
   const start = session.lines[0]?.performance ?? 0;
   const at = (performance: number) => Math.max(0, performance - start);
   const firstResize = session.lines.find((line) => line.type === "resize");
@@ -68,6 +83,19 @@ export const uiSession = (session: Session, speed = 1): UiSession => {
     tty: firstResize !== undefined,
     speed,
     events,
+    nested: nested.map(({ session: inner, depth }) => {
+      const since = (timestamp: string) => Math.max(0, Date.parse(timestamp) - Date.parse(session.timestamp));
+      const last = inner.lines.findLast((line) => line.type === "end") ?? inner.lines.at(-1);
+      return {
+        sessionId: inner.sessionId,
+        command: inner.command,
+        args: inner.args,
+        depth,
+        exitCode: inner.exitCode,
+        start: since(inner.timestamp),
+        end: since(last?.timestamp ?? inner.timestamp),
+      };
+    }),
   };
 };
 
@@ -85,7 +113,7 @@ const securityHeaders = {
  * with a timeline to pause, rewind and fast-forward it.
  */
 export const playUi = (session: Session, options: PlayUiOptions = {}): PlayUiServer => {
-  const body = JSON.stringify(uiSession(session, options.speed));
+  const body = JSON.stringify(uiSession(session, options.speed, options.nested));
   const files: Record<string, [string, string]> = {
     "/": [page, "text/html; charset=utf-8"],
     "/player.css": [style, "text/css; charset=utf-8"],
