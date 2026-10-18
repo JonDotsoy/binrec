@@ -59,3 +59,8 @@ test("dist/binrec.js works as the library", async () => {
   expect(last?.args).toEqual(["+%Y"]);
   expect(last?.exitCode).toBe(0);
 });
+
+test("dist/binrec.js --version prints the built version", async () => {
+  const { version } = await Bun.file(join(root, "package.json")).json();
+  expect(await $`${cli} --version`.text()).toBe(`${version}\n`);
+});

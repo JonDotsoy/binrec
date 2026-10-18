@@ -49,6 +49,7 @@ binrec rec --records ./records /usr/bin/date +%F
 | `binrec install` | Creates the shim folder and prints the `PATH` line for `~/.bashrc`. |
 | `binrec install <bin>` | Installs a shim for `<bin>`. |
 | `binrec rec [--records <dir>] <path> [args…]` | Runs `<path>`, passes stdio through, records the session and exits with its exit code. |
+| `binrec --version` (`-v`) | Prints the binrec version. |
 
 Set `BINREC_HOME` to use a folder other than `~/.binrec`.
 

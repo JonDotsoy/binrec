@@ -51,3 +51,13 @@ test("date runs through the binrec shim", async () => {
   expect(result.exitCode).toBe(0);
   expect(result.stdout.toString()).toBe(`date ${expected}`);
 });
+
+test("binrec --version prints the package version", async () => {
+  const { version } = await Bun.file(new URL("../package.json", import.meta.url)).json();
+
+  for (const flag of ["--version", "-v"]) {
+    const result = await $`bun ${binrec} ${flag}`.nothrow().quiet();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toBe(`${version}\n`);
+  }
+});

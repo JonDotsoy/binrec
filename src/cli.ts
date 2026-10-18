@@ -1,6 +1,8 @@
+import { version } from "../package.json";
 import { binrec, type Binrec } from "./binrec.ts";
 
 const usage = (b: Binrec) => `Usage:
+  binrec --version         Print the binrec version
   binrec install           Create ${b.path} and show how to add it to PATH
   binrec install <bin>     Install a shim for <bin> in ${b.path}
   binrec rec [--records <dir>] <path> [...]
@@ -35,6 +37,10 @@ export const runCli = async (argv: string[]) => {
   const [command, ...rest] = argv;
 
   switch (command) {
+    case "--version":
+    case "-v":
+      console.log(version);
+      process.exit(0);
     case "install":
       process.exit(await install(b, rest[0]));
     case "rec": {
