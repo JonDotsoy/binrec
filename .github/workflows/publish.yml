@@ -14,7 +14,6 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 concurrency:
   group: publish
@@ -33,8 +32,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://npm.pkg.github.com
-          scope: "@jondotsoy"
+          registry-url: https://registry.npmjs.org
 
       - run: bun install --frozen-lockfile
 
@@ -48,11 +46,16 @@ jobs:
 
       - run: bun run build
 
-      - name: Publish dist to GitHub Packages
+      - name: Pack dist
+        id: pack
         working-directory: dist
-        run: npm publish
+        run: echo "tarball=$RUNNER_TEMP/$(npm pack --silent --pack-destination "$RUNNER_TEMP")" >> "$GITHUB_OUTPUT"
+
+      - name: Publish dist to npm
+        working-directory: dist
+        run: npm publish --access restricted
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Commit and tag the new version
         run: |
@@ -61,3 +64,12 @@ jobs:
           git commit -am "Release v${{ steps.version.outputs.version }}"
           git tag "v${{ steps.version.outputs.version }}"
           git push origin HEAD "v${{ steps.version.outputs.version }}"
+
+      - name: Create GitHub release
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}" \
+            "${{ steps.pack.outputs.tarball }}" dist/binrec.js \
+            --title "v${{ steps.version.outputs.version }}" \
+            --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

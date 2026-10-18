@@ -37,8 +37,8 @@ await Bun.write(
       bin: { binrec: "binrec.js" },
       repository: { type: "git", url: "git+https://github.com/JonDotsoy/binrec.git" },
       // The root package.json stays `private` so it is never published by
-      // mistake; dist is published as a restricted package on GitHub Packages.
-      publishConfig: { registry: "https://npm.pkg.github.com", access: "restricted" },
+      // mistake; dist is published to npm as a restricted (private) package.
+      publishConfig: { registry: "https://registry.npmjs.org/", access: "restricted" },
     },
     null,
     2,

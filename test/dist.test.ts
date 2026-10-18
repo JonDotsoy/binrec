@@ -24,7 +24,7 @@ test("build writes dist/binrec.js and dist/package.json", async () => {
   expect(pkg).toMatchObject({
     name: "@jondotsoy/binrec",
     version: (await Bun.file(join(root, "package.json")).json()).version,
-    publishConfig: { registry: "https://npm.pkg.github.com", access: "restricted" },
+    publishConfig: { registry: "https://registry.npmjs.org/", access: "restricted" },
     exports: { ".": "./binrec.js" },
     bin: { binrec: "binrec.js" },
   });
