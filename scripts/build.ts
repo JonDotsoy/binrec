@@ -25,6 +25,9 @@ if (!result.success) {
 
 await chmod(join(outdir, "binrec.js"), 0o755);
 
+// npm shows the README of the published folder on the package page.
+await Bun.write(join(outdir, "README.md"), Bun.file(join(root, "README.md")));
+
 await Bun.write(
   join(outdir, "package.json"),
   `${JSON.stringify(
@@ -45,4 +48,4 @@ await Bun.write(
   )}\n`,
 );
 
-console.log(`Built ${join("dist", "binrec.js")} and ${join("dist", "package.json")}`);
+console.log(`Built ${join("dist", "binrec.js")}, ${join("dist", "package.json")} and ${join("dist", "README.md")}`);

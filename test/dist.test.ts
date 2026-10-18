@@ -19,7 +19,7 @@ afterAll(async () => {
   await rm(binrecHome, { recursive: true, force: true });
 });
 
-test("build writes dist/binrec.js and dist/package.json", async () => {
+test("build writes dist/binrec.js, dist/package.json and dist/README.md", async () => {
   const pkg = await Bun.file(join(dist, "package.json")).json();
   expect(pkg).toMatchObject({
     name: "@jondotsoy/binrec",
@@ -30,6 +30,9 @@ test("build writes dist/binrec.js and dist/package.json", async () => {
   });
   expect(pkg.private).toBeUndefined();
   expect((await Bun.file(cli).text()).startsWith("#!/usr/bin/env bun\n")).toBe(true);
+  expect(await Bun.file(join(dist, "README.md")).text()).toBe(
+    await Bun.file(join(root, "README.md")).text(),
+  );
 });
 
 test("dist/binrec.js works as the binrec bin", async () => {
