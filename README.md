@@ -120,6 +120,10 @@ bun run build   # writes dist/binrec.js and dist/package.json
 
 Releases run from the **publish** GitHub Actions workflow (`workflow_dispatch`, with a `patch`, `minor` or `major` bump). It runs the tests, builds, publishes `dist/` to npm with trusted publishing (OIDC), tags the version and creates a GitHub release.
 
+## Security
+
+Records can contain secrets. See [SECURITY.md](SECURITY.md) for how records are protected and how to report a vulnerability.
+
 ## License
 
 [MIT](LICENSE) © [Jonathan Delgado](https://jon.soy) <hi@jon.soy>
