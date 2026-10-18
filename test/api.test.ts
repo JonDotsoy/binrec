@@ -211,3 +211,11 @@ test("b.uninstallAll removes every binrec shim and nothing else", async () => {
   expect(await b.uninstallAll()).toEqual(shims.sort());
   expect(await Bun.file(other).exists()).toBe(true);
 });
+
+test("b.off and b.on are aliases of disableRecords and enableRecords", async () => {
+  const b = binrec.create({ path: join(tmp, "aliases", "bin") });
+  await b.off();
+  expect(await b.isRecording()).toBe(false);
+  await b.on();
+  expect(await b.isRecording()).toBe(true);
+});

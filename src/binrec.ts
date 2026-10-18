@@ -35,6 +35,10 @@ export type Binrec = {
   disableRecords(): Promise<void>;
   /** Turns recording back on. */
   enableRecords(): Promise<void>;
+  /** Alias of `enableRecords()`. */
+  on(): Promise<void>;
+  /** Alias of `disableRecords()`. */
+  off(): Promise<void>;
   /** True unless recording was turned off with `disableRecords()`. */
   isRecording(): Promise<boolean>;
   /** Every recorded session of `command` (a name like `date` or an absolute path), oldest first. */
@@ -137,6 +141,8 @@ const create = (options: CreateOptions = {}): Binrec => {
     uninstallAll,
     disableRecords,
     enableRecords,
+    on: enableRecords,
+    off: disableRecords,
     isRecording,
     sessions: (command) => sessions(records, command),
     lastSession: (command) => lastSession(records, command),

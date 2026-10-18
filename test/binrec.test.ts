@@ -101,3 +101,23 @@ test("binrec uninstall --all removes every shim", async () => {
   expect(again.exitCode).toBe(0);
   expect(again.stdout.toString()).toBe(`No shims installed in ${binDir}\n`);
 });
+
+test("binrec off and on turn recording off and back on", async () => {
+  const env = { ...process.env, BINREC_HOME: binrecHome };
+  const marker = join(binrecHome, "records", ".disabled");
+
+  const off = await $`bun ${binrec} off`.env(env).nothrow().quiet();
+  expect(off.exitCode).toBe(0);
+  expect(off.stdout.toString()).toContain("Recording is off");
+  expect(await Bun.file(marker).exists()).toBe(true);
+
+  const on = await $`bun ${binrec} on`.env(env).nothrow().quiet();
+  expect(on.exitCode).toBe(0);
+  expect(on.stdout.toString()).toContain("Recording is on");
+  expect(await Bun.file(marker).exists()).toBe(false);
+
+  await $`bun ${binrec} disable`.env(env).quiet();
+  expect(await Bun.file(marker).exists()).toBe(true);
+  await $`bun ${binrec} enable`.env(env).quiet();
+  expect(await Bun.file(marker).exists()).toBe(false);
+});
