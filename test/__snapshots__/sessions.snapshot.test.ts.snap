@@ -43,10 +43,13 @@ exports[`date session 1`] = `
       "type": "end",
     },
   ],
-  "recordPath": "<records>/<sessionId>.ndjson",
-  "sessionId": "<sessionId>",
-  "timestamp": "<timestamp>",
-  "total": 11,
+  "sid": "<sid>",
+  "stderr": "",
+  "stdin": "",
+  "stdout": 
+"1970-01-01
+"
+,
 }
 `;
 
@@ -93,10 +96,16 @@ exports[`cat session with stdin 1`] = `
       "type": "end",
     },
   ],
-  "recordPath": "<records>/<sessionId>.ndjson",
-  "sessionId": "<sessionId>",
-  "timestamp": "<timestamp>",
-  "total": 10,
+  "sid": "<sid>",
+  "stderr": "",
+  "stdin": 
+"hola
+"
+,
+  "stdout": 
+"hola
+"
+,
 }
 `;
 
@@ -135,10 +144,10 @@ exports[`printf session with bytes that are not UTF-8 1`] = `
       "type": "end",
     },
   ],
-  "recordPath": "<records>/<sessionId>.ndjson",
-  "sessionId": "<sessionId>",
-  "timestamp": "<timestamp>",
-  "total": 4,
+  "sid": "<sid>",
+  "stderr": "",
+  "stdin": "",
+  "stdout": "�abc",
 }
 `;
 
@@ -186,10 +195,13 @@ exports[`sessions of a command 1`] = `
         "type": "end",
       },
     ],
-    "recordPath": "<records>/<sessionId>.ndjson",
-    "sessionId": "<sessionId>",
-    "timestamp": "<timestamp>",
-    "total": 11,
+    "sid": "<sid>",
+    "stderr": "",
+    "stdin": "",
+    "stdout": 
+"1970-01-01
+"
+,
   },
   {
     "args": [
@@ -233,10 +245,13 @@ exports[`sessions of a command 1`] = `
         "type": "end",
       },
     ],
-    "recordPath": "<records>/<sessionId>.ndjson",
-    "sessionId": "<sessionId>",
-    "timestamp": "<timestamp>",
-    "total": 11,
+    "sid": "<sid>",
+    "stderr": "",
+    "stdin": "",
+    "stdout": 
+"1970-01-02
+"
+,
   },
 ]
 `;

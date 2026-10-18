@@ -2,12 +2,13 @@ import { mkdir, chmod, readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { DISABLED_MARKER, readConfig, type Config, rec } from "./rec.ts";
-import { lastSession, sessions, type Session } from "./sessions.ts";
+import { lastSession, Session, sessions } from "./sessions.ts";
 import { stats, type Stats } from "./stats.ts";
 
 export { rec } from "./rec.ts";
 export type { Config, RecOptions, RecResult } from "./rec.ts";
-export type { RecordLine, Session } from "./sessions.ts";
+export { Session } from "./sessions.ts";
+export type { RecordLine, SessionInit } from "./sessions.ts";
 export type { CommandStats, Stats } from "./stats.ts";
 
 export type CreateOptions = {

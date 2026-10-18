@@ -53,7 +53,7 @@ test("size counts the bytes of chunks that are not UTF-8", async () => {
     size: 4,
     data: null,
   });
-  expect(session.total).toBe(4);
+  expect(session.lines.at(-1)).toMatchObject({ type: "end", total: 4 });
 });
 
 test("binrec stats shows the total consumed and ranks the commands", async () => {
@@ -74,18 +74,18 @@ test("binrec stats shows the total consumed and ranks the commands", async () =>
 
 test("every session writes its own stats file and binrec stats reads it", async () => {
   const session = (await b.lastSession("cat"))!;
-  const path = join(b.records, `${session.sessionId}.stats.json`);
+  const path = join(b.records, `${session.sid}.stats.json`);
   expect(await Bun.file(path).json()).toEqual({
-    sessionId: session.sessionId,
+    sessionId: session.sid,
     command: session.command,
     total: 12,
   });
 
   // stats reads the small file instead of the record.
   const before = (await b.stats()).total;
-  await Bun.write(path, JSON.stringify({ sessionId: session.sessionId, command: session.command, total: 1012 }));
+  await Bun.write(path, JSON.stringify({ sessionId: session.sid, command: session.command, total: 1012 }));
   expect((await b.stats()).total).toBe(before + 1000);
-  await Bun.write(path, JSON.stringify({ sessionId: session.sessionId, command: session.command, total: 12 }));
+  await Bun.write(path, JSON.stringify({ sessionId: session.sid, command: session.command, total: 12 }));
 });
 
 test("sessions running at the same time are all counted once", async () => {

@@ -1,7 +1,7 @@
 import { readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { RECORD_FILE_MODE } from "./rec.ts";
-import { readSession } from "./sessions.ts";
+import { readRecord } from "./sessions.ts";
 
 export type CommandStats = {
   /** Absolute path of the recorded binary. */
@@ -56,7 +56,7 @@ const statsOf = async (recordPath: string): Promise<SessionStats | null> => {
   const cached = await readSessionStats(recordPath);
   if (cached) return cached;
 
-  const session = await readSession(recordPath).catch(() => null); // unreadable record
+  const session = await readRecord(recordPath).catch(() => null); // unreadable record
   if (!session) return null;
   const stats = { sessionId: session.sessionId, command: session.command, total: session.total };
   if (session.exitCode !== null) {

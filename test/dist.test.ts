@@ -82,7 +82,8 @@ test("dist/binrec.d.ts types the library without the sources or @types/bun", asy
       JSON.stringify({
         compilerOptions: {
           target: "ES2022",
-          lib: ["ES2022"],
+          // Session streams are web ReadableStreams, typed by the DOM lib (or @types/bun).
+          lib: ["ES2022", "DOM"],
           module: "ESNext",
           moduleResolution: "bundler",
           strict: true,

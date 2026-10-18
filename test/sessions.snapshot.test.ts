@@ -22,16 +22,20 @@ afterAll(async () => {
   await rm(tmp, { recursive: true, force: true });
 });
 
+const text = (stream: ReadableStream<Uint8Array>) => new Response(stream).text();
+
 /** Replaces the fields that change on every run so the session can be snapshotted. */
-const normalize = (session: Session | null) => {
+const normalize = async (session: Session | null) => {
   if (!session) return session;
   const command = `<path>/${basename(session.command)}`;
   return {
-    ...session,
-    sessionId: "<sessionId>",
-    timestamp: "<timestamp>",
+    sid: "<sid>",
     command,
-    recordPath: "<records>/<sessionId>.ndjson",
+    args: session.args,
+    exitCode: session.exitCode,
+    stdin: await text(session.stdin),
+    stdout: await text(session.stdout),
+    stderr: await text(session.stderr),
     lines: session.lines.map((line) => ({
       ...line,
       ...(line.type === "command" ? { sessionId: "<sessionId>", command, pid: "<pid>" } : {}),
@@ -43,21 +47,21 @@ const normalize = (session: Session | null) => {
 
 test("date session", async () => {
   await $`date -u -d @0 +%F`.env(env).quiet();
-  expect(normalize(await b.lastSession("date"))).toMatchSnapshot();
+  expect(await normalize(await b.lastSession("date"))).toMatchSnapshot();
 });
 
 test("cat session with stdin", async () => {
   await $`echo hola | cat`.env(env).quiet();
-  expect(normalize(await b.lastSession("cat"))).toMatchSnapshot();
+  expect(await normalize(await b.lastSession("cat"))).toMatchSnapshot();
 });
 
 test("printf session with bytes that are not UTF-8", async () => {
   const format = "\\377abc";
   await $`printf ${format}`.env(env).quiet();
-  expect(normalize(await b.lastSession("printf"))).toMatchSnapshot();
+  expect(await normalize(await b.lastSession("printf"))).toMatchSnapshot();
 });
 
 test("sessions of a command", async () => {
   await $`date -u -d @86400 +%F`.env(env).quiet();
-  expect((await b.sessions("date")).map(normalize)).toMatchSnapshot();
+  expect(await Promise.all((await b.sessions("date")).map(normalize))).toMatchSnapshot();
 });

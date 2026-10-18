@@ -116,10 +116,11 @@ await b.install("date");
 
 await $`date +%F`.env({ ...process.env, PATH: `${b.path}:${process.env.PATH}` });
 
-const session = await b.lastSession("date");
-session?.args;     // ["+%F"]
-session?.exitCode; // 0
-session?.lines;    // every ndjson line of the session
+const session = await b.lastSession("date"); // a Session, or null
+session?.args;                               // ["+%F"]
+session?.exitCode;                           // 0
+await new Response(session?.stdout).text();  // "2026-10-18\n"
+session?.lines;                              // every ndjson line of the session
 ```
 
 | API | Description |
@@ -138,8 +139,10 @@ session?.lines;    // every ndjson line of the session
 | `b.on(command)` / `b.off(command)` | Aliases of `b.install(command)` / `b.uninstall(command)`. |
 | `b.isRecording()` | `true` unless recording was turned off. |
 | `binrec.rec(path, args, { records })` | Runs and records one command, like `binrec rec`. Pass `records: false` to run without recording. |
+| `new Session({ exitCode, stdout, stderr, stdin, command, args, sid })` | A recorded run. `stdout`, `stderr` and `stdin` are `ReadableStream`s of the bytes the program wrote and read. |
+| `Session.fromNDJSON(stream)` | Reads a `Session` from the `ReadableStream` of an ndjson record, for example `Bun.file(path).stream()`. Rejects when the record has no `command` line. |
 
-Each session has `sessionId`, `command`, `args`, `timestamp`, `exitCode` (`null` if it has not ended), `total` (bytes consumed), `recordPath` and `lines`.
+`b.sessions()` and `b.lastSession()` return `Session` instances. A session has `sid`, `command` (absolute path of the binary), `args`, `exitCode` (`null` if it has not ended), the `stdout`, `stderr` and `stdin` streams, and `lines`, every line of its record. Each stream can be read once.
 
 ## Notes
 

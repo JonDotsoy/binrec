@@ -1,6 +1,6 @@
 import { runCli } from "./src/cli.ts";
 
-export { binrec, rec, defaultPath } from "./src/binrec.ts";
+export { binrec, rec, defaultPath, Session } from "./src/binrec.ts";
 export type {
   Binrec,
   CommandStats,
@@ -8,7 +8,7 @@ export type {
   RecOptions,
   RecResult,
   RecordLine,
-  Session,
+  SessionInit,
   Stats,
 } from "./src/binrec.ts";
 
