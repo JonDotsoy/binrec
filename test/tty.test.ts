@@ -25,12 +25,23 @@ const quote = (part: string) => `'${part.replaceAll("'", `'\\''`)}'`;
 /**
  * Runs `command` inside a pseudo terminal created by util-linux `script`, typing
  * `input` into it after a short pause so the program is ready to read it.
+ *
+ * `script`'s stdin stays open until the program exits: once it ends, `script`
+ * types an EOF (^D) into the terminal, which a slow program would still read.
  */
 const inTty = async (command: string[], input = "") => {
-  const result = await $`bash -c ${'(sleep 0.5; printf "%s" "$1"; sleep 0.5) | "$2" -qec "$3" /dev/null'} _ ${input} ${script!} ${command.map(quote).join(" ")}`
-    .nothrow()
-    .quiet();
-  return { exitCode: result.exitCode, output: result.stdout.toString() };
+  const proc = Bun.spawn([script!, "-qec", command.map(quote).join(" "), "/dev/null"], {
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  const output = new Response(proc.stdout).text();
+  await Bun.sleep(500);
+  proc.stdin.write(input);
+  await proc.stdin.flush();
+  const exitCode = await proc.exited;
+  await proc.stdin.end();
+  return { exitCode, output: await output };
 };
 
 const rec = (records: string, ...command: string[]) => [
