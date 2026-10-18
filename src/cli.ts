@@ -13,6 +13,11 @@ const usage = (b: Binrec) => `Usage:
   binrec off <bin>         Same as binrec uninstall <bin>
   binrec stats             Show how many bytes the recorded sessions consumed and
                            rank the commands that consumed the most
+  binrec list [<bin>]      List the recorded sessions (of <bin> only, if given) with
+                           their id, oldest first
+  binrec play [--speed <n>] <id>
+                           Play the session <id> back, writing its output with the
+                           recorded timing (<n> times faster; 0 writes it at once)
   binrec rec [--records <dir>] [--config <file>] <path> [...]
                            Run <path> passing stdio through and record it in ${b.records}`;
 
@@ -99,6 +104,65 @@ const printStats = async (b: Binrec) => {
   return 0;
 };
 
+/** Shows an argument like a shell would need it, quoting it only when it has to. */
+const showArg = (arg: string) => (/^[\w@%+=:,./-]+$/.test(arg) ? arg : `'${arg.replaceAll("'", `'\\''`)}'`);
+
+const printList = async (b: Binrec, command?: string) => {
+  const found = await b.sessions(command);
+  if (found.length === 0) {
+    console.log(`No recorded sessions${command ? ` of ${command}` : ""} in ${b.records}`);
+    return 0;
+  }
+
+  const rows = found.map((session) => [
+    session.sessionId,
+    session.timestamp.replace(/\.\d+Z$/, "Z"),
+    session.exitCode === null ? "-" : String(session.exitCode),
+    formatBytes(session.total),
+    [session.command, ...session.args].map(showArg).join(" "),
+  ]);
+  const header = ["ID", "STARTED", "EXIT", "SIZE", "COMMAND"];
+  const widths = header.map((title, column) =>
+    Math.max(title.length, ...rows.map((row) => row[column]!.length)),
+  );
+  for (const row of [header, ...rows]) {
+    const cells = row.map((cell, column) =>
+      column === row.length - 1
+        ? cell
+        : column === 2 || column === 3
+          ? cell.padStart(widths[column]!)
+          : cell.padEnd(widths[column]!),
+    );
+    console.log(cells.join("  "));
+  }
+  return 0;
+};
+
+const playSession = async (b: Binrec, args: string[]) => {
+  let speed = 1;
+  if (args[0] === "--speed") {
+    speed = Number(args[1]);
+    args = args.slice(2);
+    if (!Number.isFinite(speed) || speed < 0) {
+      console.error("binrec: --speed must be a number, 0 or more");
+      return 1;
+    }
+  }
+  const id = args[0];
+  if (!id) {
+    console.error(usage(b));
+    return 1;
+  }
+
+  try {
+    await b.play(id, { speed });
+    return 0;
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    return 1;
+  }
+};
+
 /** Runs the binrec CLI with `argv` (without the runtime and script) and exits the process. */
 export const runCli = async (argv: string[]) => {
   const b = binrec.create();
@@ -127,6 +191,10 @@ export const runCli = async (argv: string[]) => {
       process.exit(0);
     case "stats":
       process.exit(await printStats(b));
+    case "list":
+      process.exit(await printList(b, rest[0]));
+    case "play":
+      process.exit(await playSession(b, rest));
     case "rec": {
       let records = b.records;
       let config: string | undefined = b.config;

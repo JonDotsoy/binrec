@@ -2,10 +2,13 @@ import { mkdir, chmod, readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { DISABLED_MARKER, readConfig, type Config, rec } from "./rec.ts";
-import { lastSession, sessions, type Session } from "./sessions.ts";
+import { play, type PlayOptions } from "./play.ts";
+import { findSession, lastSession, sessions, type Session } from "./sessions.ts";
 import { stats, type Stats } from "./stats.ts";
 
 export { rec } from "./rec.ts";
+export { play } from "./play.ts";
+export type { PlayOptions } from "./play.ts";
 export type { Config, RecOptions, RecResult } from "./rec.ts";
 export type { RecordLine, Session } from "./sessions.ts";
 export type { CommandStats, Stats } from "./stats.ts";
@@ -45,8 +48,18 @@ export type Binrec = {
   off(command?: string): Promise<string | null | void>;
   /** True unless recording was turned off with `disableRecords()` (`"recording": false` in `config.json`). */
   isRecording(): Promise<boolean>;
-  /** Every recorded session of `command` (a name like `date` or an absolute path), oldest first. */
-  sessions(command: string): Promise<Session[]>;
+  /**
+   * Every recorded session of `command` (a name like `date` or an absolute path),
+   * or of every command when it is left out, oldest first.
+   */
+  sessions(command?: string): Promise<Session[]>;
+  /**
+   * The session whose id is `id` or starts with `id`, or `null` if there is none.
+   * Throws when the id matches more than one session.
+   */
+  session(id: string): Promise<Session | null>;
+  /** Writes the `stdout` and `stderr` of the session `id` again with its recorded timing. */
+  play(id: string, options?: PlayOptions): Promise<void>;
   /** The most recent recorded session of `command`, or `null` if there is none. */
   lastSession(command: string): Promise<Session | null>;
   /** Bytes consumed by every recorded session, overall and per command (most first). */
@@ -160,6 +173,12 @@ const create = (options: CreateOptions = {}): Binrec => {
     off: (command) => (command ? uninstall(command) : disableRecords()),
     isRecording,
     sessions: (command) => sessions(records, command),
+    session: (id) => findSession(records, id),
+    play: async (id, options) => {
+      const session = await findSession(records, id);
+      if (!session) throw new Error(`binrec: no recorded session ${id} in ${records}`);
+      await play(session, options);
+    },
     lastSession: (command) => lastSession(records, command),
     stats: () => stats(records),
   };

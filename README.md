@@ -53,6 +53,8 @@ binrec rec --records ./records /usr/bin/date +%F
 | `binrec on` / `binrec off` | Turns recording on or off for every shim without removing them (aliases: `enable` / `disable`). Shims keep working while recording is off. |
 | `binrec on <bin>` / `binrec off <bin>` | Same as `binrec install <bin>` / `binrec uninstall <bin>` (`off --all` works too). |
 | `binrec stats` | Shows how many sessions were recorded, how many bytes they consumed in total, and a ranking of the commands that consumed the most. |
+| `binrec list [<bin>]` | Lists the recorded sessions, oldest first, with their id, start time, exit code, size and command line. With `<bin>`, only the sessions of that binary. |
+| `binrec play [--speed <n>] <id>` | Plays session `<id>` back: writes its `stdout` and `stderr` again, each chunk as long after the start as it was recorded. The start of an id is enough when it matches only one session. `--speed 2` plays twice as fast and `--speed 0` writes everything at once. |
 | `binrec rec [--records <dir>] [--config <file>] <path> [args…]` | Runs `<path>`, passes stdio through, records the session and exits with its exit code. |
 | `binrec --version` (`-v`) | Prints the binrec version. |
 
@@ -67,6 +69,18 @@ Commands that consumed the most:
   1. /usr/bin/cat   17.4 KB  2 sessions
   2. /usr/bin/date     29 B  1 session
 ```
+
+`binrec list` shows the id `binrec play` takes:
+
+```console
+$ binrec list
+ID                                    STARTED               EXIT  SIZE  COMMAND
+8969d708-1c2e-4f0a-9b1d-3f6e2a7c5d10  2026-10-18T04:05:14Z     0  11 B  /usr/bin/date +%F
+$ binrec play 8969d708
+2026-10-18
+```
+
+`play` does not write the `stdin` chunks back: on a terminal, what you typed is already in `stdout` as the terminal's echo.
 
 Set `BINREC_HOME` to use a folder other than `~/.binrec`.
 
@@ -129,7 +143,9 @@ session?.lines;    // every ndjson line of the session
 | `b.install(command)` | Installs a shim for `command` and returns its path. Throws if the command is not found. |
 | `b.uninstall(command)` | Removes the shim for `command` and returns its path, or `null` if there was none. Only removes files binrec wrote; records are kept. |
 | `b.uninstallAll()` | Removes every binrec shim in the shim folder and returns their paths. Other files are left alone. |
-| `b.sessions(command)` | Every recorded session of `command`, oldest first. `command` can be a name (`date`) or an absolute path. |
+| `b.sessions(command?)` | Every recorded session of `command`, or of every command when it is left out, oldest first. `command` can be a name (`date`) or an absolute path. |
+| `b.session(id)` | The session whose id is `id` or starts with `id`, or `null`. Throws when the start matches more than one session. |
+| `b.play(id, { speed?, stdout?, stderr? })` | Writes the `stdout` and `stderr` of session `id` again with the recorded timing, like `binrec play`. Throws if there is no such session. |
 | `b.lastSession(command)` | The most recent session of `command`, or `null`. |
 | `b.stats()` | `{ sessions, total, commands }` from the sessions' stats files: the number of sessions, the bytes they consumed, and one `{ command, sessions, total }` per binary, the one that consumed the most first. A record without a stats file is read instead; records without `size` or `total` (older or unfinished ones) are counted from their data. |
 | `b.disableRecords()` / `b.enableRecords()` | Turns recording off or on in `config.json`, for every shim installed by this instance. Shims keep working while recording is off. |
@@ -137,6 +153,7 @@ session?.lines;    // every ndjson line of the session
 | `b.on(command)` / `b.off(command)` | Aliases of `b.install(command)` / `b.uninstall(command)`. |
 | `b.isRecording()` | `true` unless recording was turned off. |
 | `binrec.rec(path, args, { records })` | Runs and records one command, like `binrec rec`. Pass `records: false` to run without recording. |
+| `play(session, { speed?, stdout?, stderr? })` | Plays a `Session` you already read back to `stdout` and `stderr` (default `process.stdout` and `process.stderr`). |
 
 Each session has `sessionId`, `command`, `args`, `timestamp`, `exitCode` (`null` if it has not ended), `total` (bytes consumed), `recordPath` and `lines`.
 
