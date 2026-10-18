@@ -1,0 +1,11 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`binrec stats shows the total consumed and ranks the commands 1`] = `
+"Sessions: 3
+Consumed: 26 B (26 bytes)
+
+Commands that consumed the most:
+  1. <path>/cat     22 B  2 sessions
+  2. <path>/printf   4 B  1 session
+"
+`;

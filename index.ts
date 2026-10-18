@@ -3,11 +3,13 @@ import { runCli } from "./src/cli.ts";
 export { binrec, rec, defaultPath } from "./src/binrec.ts";
 export type {
   Binrec,
+  CommandStats,
   CreateOptions,
   RecOptions,
   RecResult,
   RecordLine,
   Session,
+  Stats,
 } from "./src/binrec.ts";
 
 // The bundled dist/binrec.js is both the library and the `binrec` bin.

@@ -14,6 +14,8 @@ export type RecordLine =
       type: "stdin" | "stdout" | "stderr";
       timestamp: string;
       performance: number;
+      /** Length of the chunk in bytes. Missing in older records. */
+      size?: number;
       /** The chunk as text, or `null` when it is not valid UTF-8. */
       data: string | null;
       /** The chunk's bytes in base64, present only when `data` is `null`. */
@@ -27,7 +29,14 @@ export type RecordLine =
       cols: number;
       rows: number;
     }
-  | { type: "end"; timestamp: string; performance: number; exitCode: number };
+  | {
+      type: "end";
+      timestamp: string;
+      performance: number;
+      exitCode: number;
+      /** Sum of every chunk's `size`. Missing in older records. */
+      total?: number;
+    };
 
 export type Session = {
   sessionId: string;
@@ -38,13 +47,30 @@ export type Session = {
   timestamp: string;
   /** Exit code from the `end` line, or `null` if the session has not ended. */
   exitCode: number | null;
+  /**
+   * Bytes read and written in the session: `total` from the `end` line, or the
+   * sum of the chunks when the record has no `total` (unfinished or older records).
+   */
+  total: number;
   /** Absolute path of the ndjson record. */
   recordPath: string;
   /** Every line of the record, in order. */
   lines: RecordLine[];
 };
 
-const readSession = async (recordPath: string): Promise<Session | null> => {
+/** Size of a chunk line in bytes, worked out from its data when `size` is missing. */
+const chunkSize = (line: RecordLine) => {
+  if (line.type !== "stdin" && line.type !== "stdout" && line.type !== "stderr") return 0;
+  if (typeof line.size === "number") return line.size;
+  if (line.data !== null) return Buffer.byteLength(line.data);
+  return Buffer.from(line.data_base64 ?? "", "base64").byteLength;
+};
+
+const sumChunks = (lines: RecordLine[]) =>
+  lines.reduce((sum, line) => sum + chunkSize(line), 0);
+
+/** Reads one ndjson record, or returns `null` when it does not start with a `command` line. */
+export const readSession = async (recordPath: string): Promise<Session | null> => {
   const lines = (await Bun.file(recordPath).text())
     .split("\n")
     .filter(Boolean)
@@ -54,6 +80,8 @@ const readSession = async (recordPath: string): Promise<Session | null> => {
   if (first?.type !== "command") return null;
 
   const end = lines.findLast((line) => line.type === "end");
+  const total =
+    end?.type === "end" && typeof end.total === "number" ? end.total : sumChunks(lines);
 
   return {
     sessionId: first.sessionId,
@@ -61,6 +89,7 @@ const readSession = async (recordPath: string): Promise<Session | null> => {
     args: first.args,
     timestamp: first.timestamp,
     exitCode: end?.type === "end" ? end.exitCode : null,
+    total,
     recordPath,
     lines,
   };
@@ -72,8 +101,8 @@ const matches = (session: Session, command: string) =>
     ? session.command === resolve(command)
     : basename(session.command) === command;
 
-/** Lists every recorded session of `command` in `records`, oldest first. */
-export const sessions = async (records: string, command: string): Promise<Session[]> => {
+/** Lists every recorded session in `records`, or only those of `command`, oldest first. */
+export const sessions = async (records: string, command?: string): Promise<Session[]> => {
   let files: string[];
   try {
     files = (await readdir(records)).filter((file) => file.endsWith(".ndjson"));
@@ -84,8 +113,8 @@ export const sessions = async (records: string, command: string): Promise<Sessio
   const found = await Promise.all(
     files.map(async (file) => {
       const recordPath = join(records, file);
-      const session = await readSession(recordPath);
-      if (!session || !matches(session, command)) return null;
+      const session = await readSession(recordPath).catch(() => null); // unreadable record
+      if (!session || (command !== undefined && !matches(session, command))) return null;
       return { session, mtime: (await stat(recordPath)).mtimeMs };
     }),
   );
