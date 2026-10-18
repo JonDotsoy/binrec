@@ -2,6 +2,8 @@ import { version } from "../package.json";
 import { binrec, type Binrec } from "./binrec.ts";
 
 const usage = (b: Binrec) => `Usage:
+  binrec --help            Show this help (also: -h); binrec <command> --help
+                           shows the help of one command
   binrec --version         Print the binrec version
   binrec install           Create ${b.path} and show how to add it to PATH
   binrec install <bin>     Install a shim for <bin> in ${b.path}
@@ -23,6 +25,38 @@ const usage = (b: Binrec) => `Usage:
 
 /** Help of each command, shown by `binrec <command> --help`. */
 const commandHelp: Record<string, (b: Binrec) => string> = {
+  install: (b) => `Usage: binrec install [<bin>]
+
+Without <bin>, create ${b.path} and show the line that adds it to PATH.
+With <bin>, resolve the real path of <bin> and install a shim for it in
+${b.path} that runs it through binrec rec, so every call is recorded in
+${b.records}.`,
+  uninstall: (b) => `Usage: binrec uninstall <bin>
+       binrec uninstall --all
+
+Remove the shim for <bin>, or every shim with --all, from ${b.path}.
+Recorded sessions are kept.`,
+  on: (b) => `Usage: binrec on [<bin>]
+
+Without <bin>, turn recording on: shims save their sessions in ${b.records}.
+With <bin>, same as binrec install <bin>. Also: binrec enable`,
+  off: () => `Usage: binrec off [<bin> | --all]
+
+Without <bin>, turn recording off: shims keep running the real binary but
+nothing is recorded. With <bin> or --all, same as binrec uninstall.
+Also: binrec disable`,
+  stats: (b) => `Usage: binrec stats
+
+Show how many sessions are recorded in ${b.records}, how many bytes they
+consumed in total, and rank the commands that consumed the most.`,
+  rec: (b) => `Usage: binrec rec [--records <dir>] [--config <file>] <path> [...]
+
+Run <path> with the given arguments, pass stdin, stdout and stderr through,
+record the session and exit with the program's exit code. Only a lone
+binrec rec --help shows this help; any other --help goes to the program.
+
+  --records <dir>   Folder for the records (default: ${b.records})
+  --config <file>   Settings file to read (default: ${b.config})`,
   list: (b) => `Usage: binrec list [<bin>]
 
 List the sessions recorded in ${b.records}, oldest first, with their id,
@@ -38,7 +72,16 @@ The start of an id is enough when it matches only one session.
   --speed <n>   Play <n> times faster (default: 1); 0 writes everything at once`,
 };
 
+const aliases: Record<string, string> = { enable: "on", disable: "off" };
+
 const isHelpFlag = (arg?: string) => arg === "--help" || arg === "-h";
+
+/**
+ * True when `binrec <command> <...rest>` asks for the command's help. `rec`
+ * passes its arguments on to the program, so only a lone `--help` counts there.
+ */
+const wantsHelp = (command: string, rest: string[]) =>
+  isHelpFlag(rest[0]) && (command !== "rec" || rest.length === 1);
 
 const install = async (b: Binrec, command?: string) => {
   if (!command) {
@@ -188,12 +231,17 @@ export const runCli = async (argv: string[]) => {
   const [command, ...rest] = argv;
 
   // `binrec <command> --help` shows that command's help instead of running it.
-  if (command && command in commandHelp && isHelpFlag(rest[0])) {
-    console.log(commandHelp[command]!(b));
+  const helpOf = command && commandHelp[aliases[command] ?? command];
+  if (helpOf && wantsHelp(command, rest)) {
+    console.log(helpOf(b));
     process.exit(0);
   }
 
   switch (command) {
+    case "--help":
+    case "-h":
+      console.log(usage(b));
+      process.exit(0);
     case "--version":
     case "-v":
       console.log(version);

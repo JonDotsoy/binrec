@@ -57,6 +57,7 @@ binrec rec --records ./records /usr/bin/date +%F
 | `binrec play [--speed <n>] <id>` | Plays session `<id>` back: writes its `stdout` and `stderr` again, each chunk as long after the start as it was recorded. The start of an id is enough when it matches only one session. `--speed 2` plays twice as fast and `--speed 0` writes everything at once. |
 | `binrec rec [--records <dir>] [--config <file>] <path> [args…]` | Runs `<path>`, passes stdio through, records the session and exits with its exit code. |
 | `binrec --version` (`-v`) | Prints the binrec version. |
+| `binrec --help` (`-h`) | Prints every command. `binrec <command> --help` (or `-h`) prints the help of one command without running it. For `rec`, only a lone `binrec rec --help` does; with more arguments, `--help` goes to the recorded program. |
 
 Every session writes its size to its own `~/.binrec/records/<sessionId>.stats.json`, and `binrec stats` adds up those small files instead of reading every record:
 
@@ -70,7 +71,7 @@ Commands that consumed the most:
   2. /usr/bin/date     29 B  1 session
 ```
 
-`binrec list` shows the id `binrec play` takes (`binrec list --help` and `binrec play --help` show each command's help):
+`binrec list` shows the id `binrec play` takes:
 
 ```console
 $ binrec list
