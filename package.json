@@ -1,5 +1,5 @@
 {
-  "name": "binrec",
+  "name": "@jondotsoy/binrec",
   "module": "index.ts",
   "exports": {
     ".": "./index.ts"
