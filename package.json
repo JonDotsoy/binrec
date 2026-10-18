@@ -1,8 +1,14 @@
 {
   "name": "binrec",
   "module": "index.ts",
+  "bin": {
+    "binrec": "bin/binrec.ts"
+  },
   "type": "module",
   "private": true,
+  "scripts": {
+    "test": "bash test/hello.sh"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
