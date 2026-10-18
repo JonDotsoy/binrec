@@ -99,7 +99,7 @@ test("binrec list --help and binrec play --help show the command's help", async 
 
     const play = await $`bun ${binrec} play ${flag}`.env(env).nothrow().quiet();
     expect(play.exitCode).toBe(0);
-    expect(play.stdout.toString()).toStartWith("Usage: binrec play [--timestamps] [--speed <n>] <id>\n");
+    expect(play.stdout.toString()).toStartWith("Usage: binrec play [--timestamps] [--no-wait | --speed <n>] <id>\n");
     expect(play.stdout.toString()).toContain("--speed <n>");
   }
 });
@@ -127,4 +127,21 @@ test("binrec play --timestamps shows every line with its timestamp, elapsed time
   expect(out[4]).toMatch(row(at("end"), "exit", "2"));
   expect(Number(out[4]!.match(/\+(\d+\.\d+)s/)![1])).toBeGreaterThanOrEqual(0.3);
   expect(result.stderr.toString()).toMatch(row(at("stderr"), "stderr", "dos\n"));
+});
+
+test("binrec play --no-wait writes the whole session at once and --speed slows it down", async () => {
+  const sessionId = await record("sh", "-c", "printf a; sleep 0.4; printf b");
+
+  for (const flag of ["--no-wait", "-n"]) {
+    const started = performance.now();
+    const result = await $`bun ${binrec} play ${flag} ${sessionId}`.env(env).nothrow().quiet();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toBe("ab");
+    expect(performance.now() - started).toBeLessThan(400);
+  }
+
+  const started = performance.now();
+  const slow = await $`bun ${binrec} play --speed 0.5 ${sessionId}`.env(env).nothrow().quiet();
+  expect(slow.stdout.toString()).toBe("ab");
+  expect(performance.now() - started).toBeGreaterThanOrEqual(800);
 });

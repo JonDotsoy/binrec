@@ -17,10 +17,10 @@ const usage = (b: Binrec) => `Usage:
                            rank the commands that consumed the most
   binrec list [<bin>]      List the recorded sessions (of <bin> only, if given) with
                            their id, oldest first
-  binrec play [--timestamps] [--speed <n>] <id>
+  binrec play [--timestamps] [--no-wait | --speed <n>] <id>
                            Play the session <id> back, writing its output with the
-                           recorded timing (<n> times faster; 0 writes it at once);
-                           --timestamps shows when each line was written
+                           recorded timing (<n> times faster); --no-wait writes it
+                           at once and --timestamps shows when each line was written
   binrec play --ui [--port <n>] <id>
                            Serve a page that plays the session <id> in a terminal
                            in the browser, with a timeline to rewind and fast-forward
@@ -67,7 +67,7 @@ List the sessions recorded in ${b.records}, oldest first, with their id,
 start time, exit code, size and command line. With <bin> (a name like date
 or an absolute path), list only the sessions of that binary.
 Pass an id to binrec play to play a session back.`,
-  play: (b) => `Usage: binrec play [--timestamps] [--speed <n>] <id>
+  play: (b) => `Usage: binrec play [--timestamps] [--no-wait | --speed <n>] <id>
        binrec play --ui [--port <n>] [--speed <n>] <id>
 
 Play the session <id> from ${b.records} back: write its stdout and
@@ -77,7 +77,10 @@ The start of an id is enough when it matches only one session.
   --timestamps, -t  Show every line with its recorded timestamp, the time since
                     the session started and its stream (stdout or stderr), the
                     command line first and the exit code last
-  --speed <n>       Play <n> times faster (default: 1); 0 writes everything at once
+  --no-wait, -n     Write the whole output at once, without the recorded
+                    waits, to see how the session ended (same as --speed 0)
+  --speed <n>       Play <n> times faster (default: 1): 2 is twice as fast,
+                    0.5 half as fast and 0 writes everything at once
   --ui              Instead of writing the output here, serve a page on
                     127.0.0.1 and print its address: it plays the session in a
                     terminal in the browser, with a timeline that marks every
@@ -219,11 +222,12 @@ const playSession = async (b: Binrec, args: string[]) => {
   let timestamps = false;
   let ui = false;
   let port: number | undefined;
-  const flags = ["--speed", "--timestamps", "-t", "--ui", "--port"];
+  const flags = ["--speed", "--timestamps", "-t", "--no-wait", "-n", "--ui", "--port"];
   while (args[0] !== undefined && flags.includes(args[0])) {
     const flag = args[0];
-    if (flag === "--timestamps" || flag === "-t" || flag === "--ui") {
+    if (flag === "--timestamps" || flag === "-t" || flag === "--no-wait" || flag === "-n" || flag === "--ui") {
       if (flag === "--ui") ui = true;
+      else if (flag === "--no-wait" || flag === "-n") speed = 0;
       else timestamps = true;
       args = args.slice(1);
       continue;
