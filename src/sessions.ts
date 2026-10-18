@@ -9,6 +9,8 @@ export type RecordLine =
       performance: number;
       command: string;
       args: string[];
+      /** Process id of the recorded program. Missing in older records. */
+      pid?: number;
     }
   | {
       type: "stdin" | "stdout" | "stderr";
@@ -28,6 +30,13 @@ export type RecordLine =
       performance: number;
       cols: number;
       rows: number;
+    }
+  | {
+      /** A signal binrec received while the program ran. */
+      type: "signal";
+      timestamp: string;
+      performance: number;
+      signal: string;
     }
   | {
       type: "end";
