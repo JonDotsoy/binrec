@@ -2,16 +2,23 @@ import { mkdir } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 
 export type RecOptions = {
-  /** Folder where the `<sessionId>.ndjson` record is written. */
-  records: string;
+  /**
+   * Folder where the `<sessionId>.ndjson` record is written, or `false` to run
+   * without recording. Recording is also skipped while `<records>/.disabled` exists.
+   */
+  records: string | false;
 };
 
 export type RecResult = {
-  sessionId: string;
   exitCode: number;
-  /** Absolute path of the ndjson record for this session. */
-  recordPath: string;
+  /** Session id, or `null` when nothing was recorded. */
+  sessionId: string | null;
+  /** Absolute path of the ndjson record, or `null` when nothing was recorded. */
+  recordPath: string | null;
 };
+
+/** Name of the marker file that turns recording off for a records folder. */
+export const DISABLED_MARKER = ".disabled";
 
 const stamp = () => ({
   timestamp: new Date().toISOString(),
@@ -32,10 +39,20 @@ export const rec = async (
   args: string[],
   options: RecOptions,
 ): Promise<RecResult> => {
-  const sessionId = crypto.randomUUID();
-  const records = resolve(options.records);
-  const recordPath = join(records, `${sessionId}.ndjson`);
   const command = isAbsolute(target) ? target : (Bun.which(target) ?? resolve(target));
+
+  const records = options.records === false ? null : resolve(options.records);
+  if (!records || (await Bun.file(join(records, DISABLED_MARKER)).exists())) {
+    const child = Bun.spawn([command, ...args], {
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    return { exitCode: await child.exited, sessionId: null, recordPath: null };
+  }
+
+  const sessionId = crypto.randomUUID();
+  const recordPath = join(records, `${sessionId}.ndjson`);
 
   await mkdir(records, { recursive: true });
   const record = Bun.file(recordPath).writer();
@@ -88,5 +105,5 @@ export const rec = async (
   write({ type: "end", ...stamp(), exitCode });
   await record.end();
 
-  return { sessionId, exitCode, recordPath };
+  return { exitCode, sessionId, recordPath };
 };

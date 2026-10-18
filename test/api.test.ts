@@ -102,3 +102,48 @@ test("stdin and the exit code are recorded", async () => {
   expect(dateLines.some((l) => l.type === "stderr")).toBe(true);
   expect(dateLines.at(-1)).toMatchObject({ type: "end", exitCode: date.exitCode });
 });
+
+test("sessions and lastSession return the recorded runs of a command", async () => {
+  const b = binrec.create({ path: join(tmp, "sessions", "bin") });
+  await b.install("date");
+  await b.install("cat");
+
+  const env = { ...process.env, PATH: `${b.path}:${process.env.PATH}` };
+  await $`date +%Y`.env(env).quiet();
+  await $`echo hola | cat`.env(env).quiet();
+  await $`date +%m`.env(env).quiet();
+
+  const dates = await b.sessions("date");
+  expect(dates.map((s) => s.args)).toEqual([["+%Y"], ["+%m"]]);
+  expect(dates.every((s) => s.command === Bun.which("date") && s.exitCode === 0)).toBe(true);
+
+  expect(await b.sessions(Bun.which("date")!)).toHaveLength(2);
+
+  const last = await b.lastSession("date");
+  expect(last?.args).toEqual(["+%m"]);
+  expect(last?.lines[0]?.type).toBe("command");
+  expect(last?.lines.at(-1)).toMatchObject({ type: "end", exitCode: 0 });
+
+  expect(await b.sessions("cat")).toHaveLength(1);
+  expect(await b.sessions("ls")).toEqual([]);
+  expect(await b.lastSession("ls")).toBeNull();
+});
+
+test("disableRecords turns recording off until enableRecords", async () => {
+  const b = binrec.create({ path: join(tmp, "toggle", "bin") });
+  await b.install("date");
+
+  const env = { ...process.env, PATH: `${b.path}:${process.env.PATH}` };
+  expect(await b.isRecording()).toBe(true);
+
+  await b.disableRecords();
+  expect(await b.isRecording()).toBe(false);
+  const off = await $`date +%Y`.env(env).nothrow().quiet();
+  expect(off.exitCode).toBe(0);
+  expect(await b.sessions("date")).toEqual([]);
+
+  await b.enableRecords();
+  expect(await b.isRecording()).toBe(true);
+  await $`date +%Y`.env(env).quiet();
+  expect(await b.sessions("date")).toHaveLength(1);
+});

@@ -1,10 +1,12 @@
-import { mkdir, chmod } from "node:fs/promises";
+import { mkdir, chmod, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
-import { rec } from "./rec.ts";
+import { DISABLED_MARKER, rec } from "./rec.ts";
+import { lastSession, sessions, type Session } from "./sessions.ts";
 
 export { rec } from "./rec.ts";
 export type { RecOptions, RecResult } from "./rec.ts";
+export type { RecordLine, Session } from "./sessions.ts";
 
 export type CreateOptions = {
   /** Folder where shims are installed. Defaults to `$BINREC_HOME/bin` or `~/.binrec/bin`. */
@@ -22,6 +24,16 @@ export type Binrec = {
   init(): Promise<void>;
   /** Installs a shim for `command` and returns the shim's path. */
   install(command: string): Promise<string>;
+  /** Turns recording off for every shim using this records folder. */
+  disableRecords(): Promise<void>;
+  /** Turns recording back on. */
+  enableRecords(): Promise<void>;
+  /** True unless recording was turned off with `disableRecords()`. */
+  isRecording(): Promise<boolean>;
+  /** Every recorded session of `command` (a name like `date` or an absolute path), oldest first. */
+  sessions(command: string): Promise<Session[]>;
+  /** The most recent recorded session of `command`, or `null` if there is none. */
+  lastSession(command: string): Promise<Session | null>;
 };
 
 const cliEntry = resolve(new URL("../bin/binrec.ts", import.meta.url).pathname);
@@ -66,7 +78,30 @@ const create = (options: CreateOptions = {}): Binrec => {
     return shimPath;
   };
 
-  return { path, records, init, install };
+  const marker = join(records, DISABLED_MARKER);
+
+  const disableRecords = async () => {
+    await mkdir(records, { recursive: true });
+    await Bun.write(marker, "");
+  };
+
+  const enableRecords = async () => {
+    await rm(marker, { force: true });
+  };
+
+  const isRecording = async () => !(await Bun.file(marker).exists());
+
+  return {
+    path,
+    records,
+    init,
+    install,
+    disableRecords,
+    enableRecords,
+    isRecording,
+    sessions: (command) => sessions(records, command),
+    lastSession: (command) => lastSession(records, command),
+  };
 };
 
 export const binrec = { create, rec };
