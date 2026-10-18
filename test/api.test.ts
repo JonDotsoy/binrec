@@ -1,6 +1,6 @@
 import { test, expect, beforeAll, afterAll } from "bun:test";
 import { $ } from "bun";
-import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { binrec } from "../index.ts";
@@ -179,4 +179,69 @@ test("records can only be read by the user who recorded them", async () => {
 
   expect(dirMode.toString(8)).toBe("700");
   expect(fileMode.toString(8)).toBe("600");
+});
+
+test("b.uninstall removes only binrec shims and keeps the records", async () => {
+  const b = binrec.create({ path: join(tmp, "uninstall", "bin") });
+  const shimPath = await b.install("date");
+  await $`date +%Y`.env({ ...process.env, PATH: `${b.path}:${process.env.PATH}` }).quiet();
+
+  expect(await b.uninstall("date")).toBe(shimPath);
+  expect(await Bun.file(shimPath).exists()).toBe(false);
+  expect(await b.uninstall("date")).toBeNull();
+  expect(await b.lastSession("date")).not.toBeNull();
+
+  // A file binrec did not write is left alone.
+  const other = join(b.path, "other");
+  await Bun.write(other, "#!/usr/bin/env bash\necho hi\n");
+  expect(await b.uninstall("other")).toBeNull();
+  expect(await Bun.file(other).exists()).toBe(true);
+});
+
+test("b.uninstallAll removes every binrec shim and nothing else", async () => {
+  const b = binrec.create({ path: join(tmp, "uninstall-all", "bin") });
+  expect(await b.uninstallAll()).toEqual([]);
+
+  const shims = [await b.install("date"), await b.install("true")];
+  const other = join(b.path, "other");
+  await Bun.write(other, "#!/usr/bin/env bash\necho hi\n");
+
+  await mkdir(join(b.path, "folder"));
+
+  expect(await b.uninstallAll()).toEqual(shims.sort());
+  expect(await Bun.file(other).exists()).toBe(true);
+});
+
+test("b.off and b.on are aliases of disableRecords and enableRecords", async () => {
+  const b = binrec.create({ path: join(tmp, "aliases", "bin") });
+  await b.off();
+  expect(await b.isRecording()).toBe(false);
+  await b.on();
+  expect(await b.isRecording()).toBe(true);
+});
+
+test("b.on(command) and b.off(command) install and uninstall", async () => {
+  const b = binrec.create({ path: join(tmp, "aliases-cmd", "bin") });
+  const shimPath = await b.on("date");
+  expect(shimPath).toBe(join(b.path, "date"));
+  expect(await b.off("date")).toBe(shimPath);
+  expect(await Bun.file(join(b.path, "date")).exists()).toBe(false);
+  expect(await b.isRecording()).toBe(true);
+});
+
+test("recording settings live in config.json and the old .disabled marker is still honored", async () => {
+  const b = binrec.create({ path: join(tmp, "config", "bin") });
+  expect(b.config).toBe(join(tmp, "config", "config.json"));
+
+  await b.off();
+  expect(await Bun.file(b.config).json()).toEqual({ recording: false });
+  await b.on();
+  expect(await Bun.file(b.config).json()).toEqual({ recording: true });
+
+  await mkdir(b.records, { recursive: true });
+  await Bun.write(join(b.records, ".disabled"), "");
+  expect(await b.isRecording()).toBe(false);
+  await b.enableRecords();
+  expect(await b.isRecording()).toBe(true);
+  expect(await Bun.file(join(b.records, ".disabled")).exists()).toBe(false);
 });

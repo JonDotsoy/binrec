@@ -1,6 +1,6 @@
 import { test, expect, beforeAll, afterAll } from "bun:test";
 import { $ } from "bun";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { binrec } from "../index.ts";
@@ -39,6 +39,7 @@ const rec = (records: string, ...command: string[]) => [
   "rec",
   "--records",
   records,
+  ...(command[0] === "--config" ? command.splice(0, 2) : []),
   ...command,
 ];
 
@@ -87,13 +88,14 @@ test.skipIf(!canRun || !vim)("vim works while it is recorded", async () => {
 
 test.skipIf(!canRun)("binrec rec keeps the terminal while recording is off", async () => {
   const records = join(dir, "off");
-  await mkdir(records, { recursive: true });
-  await binrec.create({ path: join(dir, "bin"), records }).disableRecords();
+  const b = binrec.create({ path: join(dir, "off-home", "bin"), records });
+  await b.disableRecords();
 
-  const { exitCode, output } = await inTty(rec(records, tty!));
+  const { exitCode, output } = await inTty(rec(records, "--config", b.config, tty!));
 
   expect(exitCode).toBe(0);
   expect(output).toMatch(/^\/dev\/pts\/\d+\r+\n/);
+  expect(await b.lastSession(tty!)).toBeNull();
 });
 
 test("binrec rec uses pipes when it is not on a terminal", async () => {

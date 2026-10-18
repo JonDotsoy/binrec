@@ -1,11 +1,11 @@
-import { mkdir, chmod, rm } from "node:fs/promises";
+import { mkdir, chmod, readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
-import { DISABLED_MARKER, RECORDS_DIR_MODE, rec } from "./rec.ts";
+import { DISABLED_MARKER, readConfig, type Config, rec } from "./rec.ts";
 import { lastSession, sessions, type Session } from "./sessions.ts";
 
 export { rec } from "./rec.ts";
-export type { RecOptions, RecResult } from "./rec.ts";
+export type { Config, RecOptions, RecResult } from "./rec.ts";
 export type { RecordLine, Session } from "./sessions.ts";
 
 export type CreateOptions = {
@@ -20,15 +20,28 @@ export type Binrec = {
   readonly path: string;
   /** Absolute path of the folder that holds the ndjson records. */
   readonly records: string;
+  /** Absolute path of `config.json`, next to the bin folder (`~/.binrec/config.json`). */
+  readonly config: string;
   /** Creates the bin folder if it does not exist yet. */
   init(): Promise<void>;
   /** Installs a shim for `command` and returns the shim's path. */
   install(command: string): Promise<string>;
+  /**
+   * Removes the shim for `command` and returns its path, or `null` if no binrec
+   * shim was installed for it. Recorded sessions are kept.
+   */
+  uninstall(command: string): Promise<string | null>;
+  /** Removes every binrec shim in the bin folder and returns their paths. Recorded sessions are kept. */
+  uninstallAll(): Promise<string[]>;
   /** Turns recording off for every shim using this records folder. */
   disableRecords(): Promise<void>;
   /** Turns recording back on. */
   enableRecords(): Promise<void>;
-  /** True unless recording was turned off with `disableRecords()`. */
+  /** With a command, same as `install(command)`; without one, same as `enableRecords()`. */
+  on(command?: string): Promise<string | void>;
+  /** With a command, same as `uninstall(command)`; without one, same as `disableRecords()`. */
+  off(command?: string): Promise<string | null | void>;
+  /** True unless recording was turned off with `disableRecords()` (`"recording": false` in `config.json`). */
   isRecording(): Promise<boolean>;
   /** Every recorded session of `command` (a name like `date` or an absolute path), oldest first. */
   sessions(command: string): Promise<Session[]>;
@@ -48,6 +61,10 @@ const cliEntry =
 export const defaultPath = () =>
   join(process.env.BINREC_HOME ?? join(homedir(), ".binrec"), "bin");
 
+/** Every shim starts with these lines, so `uninstall` never removes a file binrec did not write. */
+const SHIM_HEADER = "#!/usr/bin/env bash\nexec ";
+const isShim = (content: string) => content.startsWith(SHIM_HEADER) && content.includes(" rec --records ");
+
 const shellQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 
 /** Looks up a command in PATH, skipping `binDir` so a shim never resolves to itself. */
@@ -62,6 +79,7 @@ const whichOutside = (command: string, binDir: string) => {
 const create = (options: CreateOptions = {}): Binrec => {
   const path = resolve(options.path ?? defaultPath());
   const records = resolve(options.records ?? join(dirname(path), "records"));
+  const config = join(dirname(path), "config.json");
 
   const init = async () => {
     await mkdir(path, { recursive: true });
@@ -75,8 +93,7 @@ const create = (options: CreateOptions = {}): Binrec => {
 
     const shimPath = join(path, basename(command));
     const shim = [
-      "#!/usr/bin/env bash",
-      `exec ${shellQuote(process.execPath)} ${shellQuote(cliEntry)} rec --records ${shellQuote(records)} ${shellQuote(target)} "$@"`,
+      `${SHIM_HEADER}${shellQuote(process.execPath)} ${shellQuote(cliEntry)} rec --records ${shellQuote(records)} --config ${shellQuote(config)} ${shellQuote(target)} "$@"`,
       "",
     ].join("\n");
 
@@ -85,26 +102,58 @@ const create = (options: CreateOptions = {}): Binrec => {
     return shimPath;
   };
 
-  const marker = join(records, DISABLED_MARKER);
+  const uninstall = async (command: string) => {
+    const shimPath = join(path, basename(command));
+    const shim = Bun.file(shimPath);
+    const content = await shim.text().catch(() => null); // missing file or a folder
+    if (content === null || !isShim(content)) return null;
+
+    await rm(shimPath);
+    return shimPath;
+  };
+
+  const uninstallAll = async () => {
+    const names = await readdir(path).catch(() => [] as string[]);
+    const removed: string[] = [];
+    for (const name of names.sort()) {
+      const shimPath = await uninstall(name);
+      if (shimPath) removed.push(shimPath);
+    }
+    return removed;
+  };
+
+  const legacyMarker = join(records, DISABLED_MARKER);
+
+  const writeConfig = async (changes: Config) => {
+    await mkdir(dirname(config), { recursive: true });
+    const current = await readConfig(config);
+    await Bun.write(config, `${JSON.stringify({ ...current, ...changes }, null, 2)}\n`);
+  };
 
   const disableRecords = async () => {
-    await mkdir(records, { recursive: true, mode: RECORDS_DIR_MODE });
-    await Bun.write(marker, "");
+    await writeConfig({ recording: false });
   };
 
   const enableRecords = async () => {
-    await rm(marker, { force: true });
+    await writeConfig({ recording: true });
+    await rm(legacyMarker, { force: true });
   };
 
-  const isRecording = async () => !(await Bun.file(marker).exists());
+  const isRecording = async () =>
+    (await readConfig(config)).recording !== false && !(await Bun.file(legacyMarker).exists());
 
   return {
     path,
     records,
+    config,
     init,
     install,
+    uninstall,
+    uninstallAll,
     disableRecords,
     enableRecords,
+    on: (command) => (command ? install(command) : enableRecords()),
+    off: (command) => (command ? uninstall(command) : disableRecords()),
     isRecording,
     sessions: (command) => sessions(records, command),
     lastSession: (command) => lastSession(records, command),
