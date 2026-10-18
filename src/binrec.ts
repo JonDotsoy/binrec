@@ -86,9 +86,17 @@ const cliEntry =
 export const defaultPath = () =>
   join(process.env.BINREC_HOME ?? join(homedir(), ".binrec"), "bin");
 
-/** Every shim starts with these lines, so `uninstall` never removes a file binrec did not write. */
-const SHIM_HEADER = "#!/usr/bin/env bash\nexec ";
-const isShim = (content: string) => content.startsWith(SHIM_HEADER) && content.includes(" rec --records ");
+/**
+ * Every shim starts with these lines, so `uninstall` never removes a file binrec did not write.
+ * The shell is an absolute path: `#!/usr/bin/env bash` looks bash up in PATH, so a
+ * shim for `bash` would run itself forever.
+ */
+const SHIM_HEADER = "#!/bin/sh\nexec ";
+/** Header of shims written by binrec 0.0.5 and older. */
+const LEGACY_SHIM_HEADER = "#!/usr/bin/env bash\nexec ";
+const isShim = (content: string) =>
+  (content.startsWith(SHIM_HEADER) || content.startsWith(LEGACY_SHIM_HEADER)) &&
+  content.includes(" rec --records ");
 
 const shellQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 
