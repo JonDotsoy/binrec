@@ -150,11 +150,12 @@ Each session has `sessionId`, `command`, `args`, `timestamp`, `exitCode` (`null`
 
 ```sh
 bun install
-bun test        # tests use Bun.$ and snapshots; the date cases need GNU date
-bun run build   # writes dist/binrec.js and dist/package.json
+bun test           # tests use Bun.$ and snapshots; the date cases need GNU date
+bun run typecheck  # tsc --noEmit over the sources and tests
+bun run build      # writes dist/binrec.js, dist/binrec.d.ts and dist/package.json
 ```
 
-`dist/binrec.js` is both the library and the `binrec` bin. Only `dist/` is published; the root `package.json` is private.
+`dist/binrec.js` is both the library and the `binrec` bin; `dist/binrec.d.ts` holds its types. Only `dist/` is published; the root `package.json` is private.
 
 Releases run from the **publish** GitHub Actions workflow (`workflow_dispatch`, with a `patch`, `minor` or `major` bump). It runs the tests, builds, publishes `dist/` to npm with trusted publishing (OIDC), tags the version and creates a GitHub release.
 

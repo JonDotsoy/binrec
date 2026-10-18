@@ -1,6 +1,6 @@
 import { test, expect, beforeAll, afterAll } from "bun:test";
 import { $ } from "bun";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -19,7 +19,7 @@ afterAll(async () => {
   await rm(binrecHome, { recursive: true, force: true });
 });
 
-test("build writes dist/binrec.js, dist/package.json, README.md, LICENSE and SECURITY.md", async () => {
+test("build writes dist/binrec.js, dist/binrec.d.ts, dist/package.json, README.md, LICENSE and SECURITY.md", async () => {
   const pkg = await Bun.file(join(dist, "package.json")).json();
   expect(pkg).toMatchObject({
     name: "@jondotsoy/binrec",
@@ -29,10 +29,12 @@ test("build writes dist/binrec.js, dist/package.json, README.md, LICENSE and SEC
     repository: { type: "git", url: "git+https://github.com/JonDotsoy/binrec.git" },
     version: (await Bun.file(join(root, "package.json")).json()).version,
     publishConfig: { registry: "https://registry.npmjs.org/", access: "public" },
-    exports: { ".": "./binrec.js" },
+    types: "./binrec.d.ts",
+    exports: { ".": { types: "./binrec.d.ts", default: "./binrec.js" } },
     bin: { binrec: "binrec.js" },
   });
   expect(pkg.private).toBeUndefined();
+  expect(await Bun.file(join(dist, "binrec.d.ts")).exists()).toBe(true);
   expect((await Bun.file(cli).text()).startsWith("#!/usr/bin/env bun\n")).toBe(true);
   for (const file of ["README.md", "LICENSE", "SECURITY.md"]) {
     expect(await Bun.file(join(dist, file)).text()).toBe(await Bun.file(join(root, file)).text());
@@ -63,4 +65,53 @@ test("dist/binrec.js works as the library", async () => {
 test("dist/binrec.js --version prints the built version", async () => {
   const { version } = await Bun.file(join(root, "package.json")).json();
   expect(await $`${cli} --version`.text()).toBe(`${version}\n`);
+});
+
+test("dist/binrec.d.ts types the library without the sources or @types/bun", async () => {
+  const types = await Bun.file(join(dist, "binrec.d.ts")).text();
+  expect(types).not.toContain("./src/");
+  expect(types).not.toMatch(/\bimport\b|reference types/);
+
+  // A consumer project that installs dist as @jondotsoy/binrec.
+  const consumer = await mkdtemp(join(tmpdir(), "binrec-types-"));
+  try {
+    await mkdir(join(consumer, "node_modules", "@jondotsoy"), { recursive: true });
+    await symlink(dist, join(consumer, "node_modules", "@jondotsoy", "binrec"));
+    await Bun.write(
+      join(consumer, "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          target: "ES2022",
+          lib: ["ES2022"],
+          module: "ESNext",
+          moduleResolution: "bundler",
+          strict: true,
+          types: [],
+          noEmit: true,
+        },
+        files: ["consumer.ts"],
+      }),
+    );
+    await Bun.write(
+      join(consumer, "consumer.ts"),
+      [
+        `import { binrec, rec, defaultPath, type Binrec, type Session, type Stats, type RecResult } from "@jondotsoy/binrec";`,
+        `const b: Binrec = binrec.create({ path: defaultPath() });`,
+        `export const last: Promise<Session | null> = b.lastSession("date");`,
+        `export const stats: Promise<Stats> = b.stats();`,
+        `export const result: Promise<RecResult> = rec("/bin/date", [], { records: false });`,
+        `export const same: typeof rec = binrec.rec;`,
+        `// @ts-expect-error install needs a command`,
+        `b.install();`,
+        `// @ts-expect-error only what index.ts exports is public`,
+        `import { create } from "@jondotsoy/binrec";`,
+        "",
+      ].join("\n"),
+    );
+    const result = await $`${join(root, "node_modules", ".bin", "tsc")} -p ${consumer}`.nothrow().quiet();
+    expect(result.stdout.toString()).toBe("");
+    expect(result.exitCode).toBe(0);
+  } finally {
+    await rm(consumer, { recursive: true, force: true });
+  }
 });
