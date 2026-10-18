@@ -93,6 +93,25 @@ jobs:
               bin.install "binrec.js" => "binrec"
             end
 
+            # binrec 0.0.3 and older wrote records other users could read.
+            def post_install
+              records = Pathname.new(Dir.home)/".binrec/records"
+              return unless records.directory?
+
+              records.chmod 0700
+              records.glob("*.{ndjson,json}").each { |file| file.chmod 0600 }
+            rescue Errno::EPERM, Errno::EACCES
+              opoo "Could not make #{records} private, run: chmod 700 #{records} && chmod 600 #{records}/*"
+            end
+
+            def caveats
+              <<~EOS
+                Records written by binrec 0.0.3 or older may be readable by other users.
+                If you use another BINREC_HOME, make its records private with:
+                  chmod 700 "\$BINREC_HOME/records" && chmod 600 "\$BINREC_HOME/records/"*
+              EOS
+            end
+
             test do
               system bin/"binrec"
             end
