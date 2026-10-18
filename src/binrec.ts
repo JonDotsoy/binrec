@@ -1,7 +1,7 @@
 import { mkdir, chmod, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
-import { DISABLED_MARKER, rec } from "./rec.ts";
+import { DISABLED_MARKER, RECORDS_DIR_MODE, rec } from "./rec.ts";
 import { lastSession, sessions, type Session } from "./sessions.ts";
 
 export { rec } from "./rec.ts";
@@ -88,7 +88,7 @@ const create = (options: CreateOptions = {}): Binrec => {
   const marker = join(records, DISABLED_MARKER);
 
   const disableRecords = async () => {
-    await mkdir(records, { recursive: true });
+    await mkdir(records, { recursive: true, mode: RECORDS_DIR_MODE });
     await Bun.write(marker, "");
   };
 

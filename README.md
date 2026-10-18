@@ -68,6 +68,7 @@ Each session is one ndjson file:
 - If a chunk is not valid UTF-8 on its own, `data` is `null` and the raw bytes are in `data_base64`, so nothing is lost.
 - On a terminal, `resize` lines hold the window size (`cols`, `rows`): one at the start and one each time the window changes.
 - The last line (`end`) has the exit code.
+- Records are private: each file is created with mode `0600` and a records folder binrec creates gets `0700`, so only the user who recorded a session can read it, whatever the `umask`.
 - `timestamp` is wall-clock time (ISO 8601) and `performance` is `performance.now()` in the recording process.
 
 ## Library

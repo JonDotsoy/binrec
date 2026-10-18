@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, open } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 
 export type RecOptions = {
@@ -19,6 +19,11 @@ export type RecResult = {
 
 /** Name of the marker file that turns recording off for a records folder. */
 export const DISABLED_MARKER = ".disabled";
+
+/** Permissions of a records folder binrec creates: only its owner can list or enter it. */
+export const RECORDS_DIR_MODE = 0o700;
+/** Permissions of every record: only its owner can read or write it. */
+export const RECORD_FILE_MODE = 0o600;
 
 const strictDecoder = new TextDecoder("utf-8", { fatal: true });
 
@@ -174,7 +179,10 @@ export const rec = async (
   const sessionId = crypto.randomUUID();
   const recordPath = join(records, `${sessionId}.ndjson`);
 
-  await mkdir(records, { recursive: true });
+  // Records hold everything the program read and printed, so only the user who
+  // recorded them can read them: new folders are 0700 and records are 0600.
+  await mkdir(records, { recursive: true, mode: RECORDS_DIR_MODE });
+  await (await open(recordPath, "wx", RECORD_FILE_MODE)).close();
   const record = Bun.file(recordPath).writer();
   const write: Write = (line) => {
     record.write(`${JSON.stringify(line)}\n`);
