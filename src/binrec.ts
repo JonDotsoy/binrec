@@ -1,15 +1,23 @@
 import { mkdir, chmod } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, delimiter, isAbsolute, join, resolve } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
+import { rec } from "./rec.ts";
+
+export { rec } from "./rec.ts";
+export type { RecOptions, RecResult } from "./rec.ts";
 
 export type CreateOptions = {
   /** Folder where shims are installed. Defaults to `$BINREC_HOME/bin` or `~/.binrec/bin`. */
   path?: string;
+  /** Folder where `binrec rec` writes its ndjson records. Defaults to `records` next to `path`. */
+  records?: string;
 };
 
 export type Binrec = {
   /** Absolute path of the folder that holds the shims; add it to PATH. */
   readonly path: string;
+  /** Absolute path of the folder that holds the ndjson records. */
+  readonly records: string;
   /** Creates the bin folder if it does not exist yet. */
   init(): Promise<void>;
   /** Installs a shim for `command` and returns the shim's path. */
@@ -34,6 +42,7 @@ const whichOutside = (command: string, binDir: string) => {
 
 const create = (options: CreateOptions = {}): Binrec => {
   const path = resolve(options.path ?? defaultPath());
+  const records = resolve(options.records ?? join(dirname(path), "records"));
 
   const init = async () => {
     await mkdir(path, { recursive: true });
@@ -48,7 +57,7 @@ const create = (options: CreateOptions = {}): Binrec => {
     const shimPath = join(path, basename(command));
     const shim = [
       "#!/usr/bin/env bash",
-      `exec ${shellQuote(process.execPath)} ${shellQuote(cliEntry)} rec ${shellQuote(target)} "$@"`,
+      `exec ${shellQuote(process.execPath)} ${shellQuote(cliEntry)} rec --records ${shellQuote(records)} ${shellQuote(target)} "$@"`,
       "",
     ].join("\n");
 
@@ -57,17 +66,7 @@ const create = (options: CreateOptions = {}): Binrec => {
     return shimPath;
   };
 
-  return { path, init, install };
-};
-
-/** Runs `target` with `args`, passing stdin, stdout and stderr through, and resolves to its exit code. */
-export const rec = async (target: string, args: string[] = []) => {
-  const child = Bun.spawn([target, ...args], {
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  return await child.exited;
+  return { path, records, init, install };
 };
 
 export const binrec = { create, rec };
