@@ -56,7 +56,7 @@ binrec rec --records ./records /usr/bin/date +%F
 | `binrec rec [--records <dir>] [--config <file>] <path> [args…]` | Runs `<path>`, passes stdio through, records the session and exits with its exit code. |
 | `binrec --version` (`-v`) | Prints the binrec version. |
 
-Every session adds its `total` to `~/.binrec/records/stats.json`, and `binrec stats` reads that file instead of going through every record:
+Every session writes its size to its own `~/.binrec/records/<sessionId>.stats.json`, and `binrec stats` adds up those small files instead of reading every record:
 
 ```console
 $ binrec stats
@@ -81,8 +81,8 @@ Settings are saved in `~/.binrec/config.json`. For now it holds one setting, wri
 | Path | What it holds |
 | --- | --- |
 | `bin/` | The shims. Each one points at the real binary, the records folder and `config.json`. |
-| `records/` | One `<sessionId>.ndjson` file per recorded session, plus `stats.json`. |
-| `records/stats.json` | Running totals (`sessions`, `total` bytes, and the same per command), rewritten after every session. If it is missing, `binrec stats` (or the next session) rebuilds it from the records; delete it to recount after removing records. |
+| `records/` | One `<sessionId>.ndjson` file per recorded session, and its `<sessionId>.stats.json`. |
+| `records/<sessionId>.stats.json` | `{ sessionId, command, total }` of one finished session, written when it ends. `binrec stats` writes it for older records that do not have one; a stats file whose record was deleted is not counted. |
 | `config.json` | binrec's settings. A missing file means the defaults (recording on). |
 
 ## Record format
@@ -130,7 +130,7 @@ session?.lines;    // every ndjson line of the session
 | `b.uninstallAll()` | Removes every binrec shim in the shim folder and returns their paths. Other files are left alone. |
 | `b.sessions(command)` | Every recorded session of `command`, oldest first. `command` can be a name (`date`) or an absolute path. |
 | `b.lastSession(command)` | The most recent session of `command`, or `null`. |
-| `b.stats()` | `{ sessions, total, commands }` from `records/stats.json`: the number of sessions, the bytes they consumed, and one `{ command, sessions, total }` per binary, the one that consumed the most first. When the file is missing it is rebuilt from the records; records without `size` or `total` (older or unfinished ones) are counted from their data. |
+| `b.stats()` | `{ sessions, total, commands }` from the sessions' stats files: the number of sessions, the bytes they consumed, and one `{ command, sessions, total }` per binary, the one that consumed the most first. A record without a stats file is read instead; records without `size` or `total` (older or unfinished ones) are counted from their data. |
 | `b.disableRecords()` / `b.enableRecords()` | Turns recording off or on in `config.json`, for every shim installed by this instance. Shims keep working while recording is off. |
 | `b.on()` / `b.off()` | Aliases of `b.enableRecords()` / `b.disableRecords()`. |
 | `b.on(command)` / `b.off(command)` | Aliases of `b.install(command)` / `b.uninstall(command)`. |

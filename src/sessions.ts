@@ -69,7 +69,8 @@ const chunkSize = (line: RecordLine) => {
 const sumChunks = (lines: RecordLine[]) =>
   lines.reduce((sum, line) => sum + chunkSize(line), 0);
 
-const readSession = async (recordPath: string): Promise<Session | null> => {
+/** Reads one ndjson record, or returns `null` when it does not start with a `command` line. */
+export const readSession = async (recordPath: string): Promise<Session | null> => {
   const lines = (await Bun.file(recordPath).text())
     .split("\n")
     .filter(Boolean)
