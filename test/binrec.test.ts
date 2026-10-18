@@ -25,7 +25,7 @@ test("binrec install creates the bin dir and shows the PATH line", async () => {
     .quiet();
 
   expect(result.exitCode).toBe(0);
-  expect(result.stdout.toString()).toContain(`export PATH="$PATH:${binDir}"`);
+  expect(result.stdout.toString()).toContain(`export PATH="${binDir}:$PATH"`);
   expect(await Bun.file(binDir).stat().then((s) => s.isDirectory())).toBe(true);
 });
 

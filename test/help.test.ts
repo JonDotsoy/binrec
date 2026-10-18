@@ -28,7 +28,7 @@ test("binrec --help and -h print the usage to stdout", async () => {
 });
 
 test("every command shows its help with --help or -h instead of running", async () => {
-  const commands = ["install", "uninstall", "on", "enable", "off", "disable", "stats", "rec", "list", "play"];
+  const commands = ["init", "install", "uninstall", "on", "enable", "off", "disable", "stats", "rec", "list", "play"];
   for (const command of commands) {
     for (const flag of ["--help", "-h"]) {
       const result = await $`bun ${binrec} ${command} ${flag}`.env(env).nothrow().quiet();

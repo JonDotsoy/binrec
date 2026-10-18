@@ -8,6 +8,8 @@ export type {
   PlayUiServer,
   CommandStats,
   CreateOptions,
+  InitShellOptions,
+  InitShellResult,
   RecOptions,
   RecResult,
   RecordLine,
