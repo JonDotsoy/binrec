@@ -55,19 +55,18 @@
 <text x="62" y="15.5" font-size="11" fill="#ff9b94">2.0s</text>
 </g>
 <g font-size="15" xml:space="preserve">
-<text x="22" y="72" fill="#e6edf3"><tspan fill="#7ee787">$</tspan> make build</text>
-<text x="22" y="98" fill="#e6edf3">building...</text>
-<text x="22" y="124" fill="#ff7b72">warning: unused variable</text>
-<text x="22" y="150" fill="#e6edf3">done in 2.0s</text>
+<text x="22" y="72" fill="#e6edf3"><tspan fill="#7ee787">$</tspan> bunx @jondotsoy/binrec install date</text>
+<text x="22" y="98" fill="#8b949e">Installed ~/.binrec/bin/date</text>
+<text x="22" y="124" fill="#e6edf3"><tspan fill="#7ee787">$</tspan> date</text>
+<text x="22" y="150" fill="#e6edf3">Sun Oct 18 20:23:59 UTC 2026</text>
 <text x="22" y="176" fill="#e6edf3"><tspan fill="#7ee787">$</tspan> <tspan class="caret" fill="#e6edf3">▋</tspan></text>
 </g>
 <line x1="22" y1="198" x2="578" y2="198" stroke="#30363d" stroke-dasharray="4 5"/>
 <g font-size="12.5" xml:space="preserve">
-<text x="22" y="222" fill="#8b949e">→ ~/.binrec/records/e531b87f.ndjson</text>
-<text x="22" y="246" fill="#6e7681">{"type":<tspan fill="#a5d6ff">"command"</tspan>,"command":"/usr/bin/make","args":["build"]}</text>
-<text x="22" y="266" fill="#6e7681">{"type":<tspan fill="#7ee787">"stdout"</tspan>,"data":"building...\n"}</text>
-<text x="22" y="286" fill="#6e7681">{"type":<tspan fill="#ff7b72">"stderr"</tspan>,"data":"warning: unused variable\n"}</text>
-<text x="22" y="306" fill="#6e7681">{"type":<tspan fill="#d2a8ff">"end"</tspan>,"exitCode":0,"total":50}</text>
+<text x="22" y="226" fill="#8b949e">→ ~/.binrec/records/e531b87f.ndjson</text>
+<text x="22" y="256" fill="#6e7681">{"type":<tspan fill="#a5d6ff">"command"</tspan>,"command":"/usr/bin/date","args":[]}</text>
+<text x="22" y="280" fill="#6e7681">{"type":<tspan fill="#7ee787">"stdout"</tspan>,"data":"Sun Oct 18 20:23:59 UTC 2026\n"}</text>
+<text x="22" y="304" fill="#6e7681">{"type":<tspan fill="#d2a8ff">"end"</tspan>,"exitCode":0,"total":29}</text>
 </g>
 </g>
 </g>
