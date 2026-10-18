@@ -39,6 +39,107 @@ const stamp = () => ({
   performance: performance.now(),
 });
 
+type Write = (line: Record<string, unknown>) => void;
+
+/**
+ * Runs the command attached to a pseudo terminal, so interactive programs (vim,
+ * `docker exec -it`, pagers) see a real TTY. The terminal merges stdout and
+ * stderr, so everything the program prints is recorded as `stdout`. Window size
+ * changes are forwarded to the program and recorded as `resize` lines.
+ */
+const recInTerminal = async (command: string, args: string[], write: Write) => {
+  const stdin = process.stdin;
+  const stdout = process.stdout;
+  const size = () => ({ cols: stdout.columns || 80, rows: stdout.rows || 24 });
+
+  let closed: () => void;
+  const terminalClosed = new Promise<void>((resolve) => (closed = resolve));
+
+  const terminal = new Bun.Terminal({
+    ...size(),
+    name: process.env.TERM || "xterm-256color",
+    data(_terminal, chunk) {
+      stdout.write(chunk);
+      write({ type: "stdout", ...stamp(), ...encodeChunk(chunk) });
+    },
+    exit() {
+      closed();
+    },
+  });
+
+  write({ type: "resize", ...stamp(), ...size() });
+  const onResize = () => {
+    const { cols, rows } = size();
+    terminal.resize(cols, rows);
+    write({ type: "resize", ...stamp(), cols, rows });
+  };
+  const onInput = (chunk: Uint8Array) => {
+    write({ type: "stdin", ...stamp(), ...encodeChunk(chunk) });
+    terminal.write(chunk);
+  };
+
+  // Raw mode hands every key (Ctrl-C, arrows, Esc) to the program instead of
+  // letting the outer terminal act on it.
+  stdin.setRawMode(true);
+  stdin.on("data", onInput);
+  stdin.resume();
+  stdout.on("resize", onResize);
+
+  try {
+    const child = Bun.spawn([command, ...args], { terminal });
+    const exitCode = await child.exited;
+    // Output the program wrote just before exiting may still be in the PTY.
+    await Promise.race([terminalClosed, Bun.sleep(100)]);
+    return exitCode;
+  } finally {
+    stdout.off("resize", onResize);
+    stdin.off("data", onInput);
+    stdin.setRawMode(false);
+    stdin.pause();
+    terminal.close();
+  }
+};
+
+/** Runs the command with piped stdio, keeping stdout and stderr apart. */
+const recInPipes = async (command: string, args: string[], write: Write) => {
+  const child = Bun.spawn([command, ...args], {
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const forward = async (
+    type: "stdout" | "stderr",
+    source: ReadableStream<Uint8Array>,
+    sink: NodeJS.WriteStream,
+  ) => {
+    for await (const chunk of source) {
+      sink.write(chunk);
+      write({ type, ...stamp(), ...encodeChunk(chunk) });
+    }
+  };
+
+  // Not awaited: stdin may never end, and the session is over once the child exits.
+  void (async () => {
+    try {
+      for await (const chunk of process.stdin as AsyncIterable<Uint8Array>) {
+        write({ type: "stdin", ...stamp(), ...encodeChunk(chunk) });
+        child.stdin.write(chunk);
+        await child.stdin.flush();
+      }
+      await child.stdin.end();
+    } catch {
+      // The child closed its stdin or already exited.
+    }
+  })();
+
+  await Promise.all([
+    forward("stdout", child.stdout, process.stdout),
+    forward("stderr", child.stderr, process.stderr),
+  ]);
+  return child.exited;
+};
+
 /**
  * Runs `target` with `args`, passing stdin, stdout and stderr through to the
  * real binary while recording every chunk to `<records>/<sessionId>.ndjson`.
@@ -47,7 +148,11 @@ const stamp = () => ({
  * - `{ type: "command", sessionId, timestamp, performance, command, args }`
  * - `{ type: "stdin" | "stdout" | "stderr", timestamp, performance, data }`, where
  *   `data` is `null` and `data_base64` holds the bytes if the chunk is not valid UTF-8
+ * - `{ type: "resize", timestamp, performance, cols, rows }` when run on a terminal
  * - `{ type: "end", timestamp, performance, exitCode }`
+ *
+ * When both stdin and stdout are a terminal, the program runs on a pseudo
+ * terminal so interactive programs keep working; otherwise it runs with pipes.
  */
 export const rec = async (
   target: string,
@@ -71,49 +176,16 @@ export const rec = async (
 
   await mkdir(records, { recursive: true });
   const record = Bun.file(recordPath).writer();
-  const write = (line: Record<string, unknown>) => {
+  const write: Write = (line) => {
     record.write(`${JSON.stringify(line)}\n`);
   };
 
   write({ type: "command", sessionId, ...stamp(), command, args });
 
-  const child = Bun.spawn([command, ...args], {
-    stdin: "pipe",
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  const forward = async (
-    type: "stdout" | "stderr",
-    source: ReadableStream<Uint8Array>,
-    sink: NodeJS.WriteStream,
-  ) => {
-    for await (const chunk of source) {
-      sink.write(chunk);
-      write({ type, ...stamp(), ...encodeChunk(chunk) });
-    }
-  };
-
-  // Not awaited: on a terminal stdin may never end, and the session is over
-  // once the child exits.
-  void (async () => {
-    try {
-      for await (const chunk of process.stdin as AsyncIterable<Uint8Array>) {
-        write({ type: "stdin", ...stamp(), ...encodeChunk(chunk) });
-        child.stdin.write(chunk);
-        await child.stdin.flush();
-      }
-      await child.stdin.end();
-    } catch {
-      // The child closed its stdin or already exited.
-    }
-  })();
-
-  await Promise.all([
-    forward("stdout", child.stdout, process.stdout),
-    forward("stderr", child.stderr, process.stderr),
-  ]);
-  const exitCode = await child.exited;
+  const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  const exitCode = interactive
+    ? await recInTerminal(command, args, write)
+    : await recInPipes(command, args, write);
 
   write({ type: "end", ...stamp(), exitCode });
   await record.end();
