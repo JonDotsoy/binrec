@@ -23,10 +23,12 @@ test("build writes dist/binrec.js and dist/package.json", async () => {
   const pkg = await Bun.file(join(dist, "package.json")).json();
   expect(pkg).toMatchObject({
     name: "@jondotsoy/binrec",
-    private: true,
+    version: (await Bun.file(join(root, "package.json")).json()).version,
+    publishConfig: { registry: "https://npm.pkg.github.com", access: "restricted" },
     exports: { ".": "./binrec.js" },
     bin: { binrec: "binrec.js" },
   });
+  expect(pkg.private).toBeUndefined();
   expect((await Bun.file(cli).text()).startsWith("#!/usr/bin/env bun\n")).toBe(true);
 });
 

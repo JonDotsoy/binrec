@@ -30,12 +30,15 @@ await Bun.write(
   `${JSON.stringify(
     {
       name: pkg.name,
-      version: pkg.version ?? "0.0.0",
-      private: pkg.private,
+      version: pkg.version,
       type: "module",
       module: "binrec.js",
       exports: { ".": "./binrec.js" },
       bin: { binrec: "binrec.js" },
+      repository: { type: "git", url: "git+https://github.com/JonDotsoy/binrec.git" },
+      // The root package.json stays `private` so it is never published by
+      // mistake; dist is published as a restricted package on GitHub Packages.
+      publishConfig: { registry: "https://npm.pkg.github.com", access: "restricted" },
     },
     null,
     2,
