@@ -23,6 +23,12 @@ Create the shim folder (`~/.binrec/bin`) and see the lines to add to `~/.bashrc`
 binrec init
 ```
 
+You can also run it directly, without installing binrec first:
+
+```sh
+bunx @jondotsoy/binrec init
+```
+
 `binrec init` does not change any file: copy the `export` lines it prints into `~/.bashrc` (or your shell's startup file) and reload it with `source ~/.bashrc`. When `BINREC_HOME` is not the default `~/.binrec`, it prints an `export BINREC_HOME=…` line too. `binrec install` without a binary does the same.
 
 Install a shim for a binary:
