@@ -155,3 +155,18 @@ test("binrec on <bin> and off <bin> install and uninstall the shim", async () =>
   expect(off.stdout.toString()).toBe(`Uninstalled ${join(binDir, "date")}\n`);
   expect(await Bun.file(join(binDir, "date")).exists()).toBe(false);
 });
+
+test("binrec enable <bin> and disable <bin> install and uninstall like on and off", async () => {
+  const env = { ...process.env, BINREC_HOME: binrecHome };
+  const shim = join(binDir, "date");
+
+  const enable = await $`bun ${binrec} enable date`.env(env).nothrow().quiet();
+  expect(enable.exitCode).toBe(0);
+  expect(enable.stdout.toString()).toBe(`Installed ${shim}\n`);
+  expect(await Bun.file(shim).exists()).toBe(true);
+
+  const disable = await $`bun ${binrec} disable date`.env(env).nothrow().quiet();
+  expect(disable.exitCode).toBe(0);
+  expect(disable.stdout.toString()).toBe(`Uninstalled ${shim}\n`);
+  expect(await Bun.file(shim).exists()).toBe(false);
+});
