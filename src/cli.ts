@@ -21,6 +21,9 @@ const usage = (b: Binrec) => `Usage:
                            Play the session <id> back, writing its output with the
                            recorded timing (<n> times faster; 0 writes it at once);
                            --timestamps shows when each line was written
+  binrec play --ui [--port <n>] <id>
+                           Serve a page that plays the session <id> in a terminal
+                           in the browser, with a timeline to rewind and fast-forward
   binrec rec [--records <dir>] [--config <file>] <path> [...]
                            Run <path> passing stdio through and record it in ${b.records}`;
 
@@ -65,6 +68,7 @@ start time, exit code, size and command line. With <bin> (a name like date
 or an absolute path), list only the sessions of that binary.
 Pass an id to binrec play to play a session back.`,
   play: (b) => `Usage: binrec play [--timestamps] [--speed <n>] <id>
+       binrec play --ui [--port <n>] [--speed <n>] <id>
 
 Play the session <id> from ${b.records} back: write its stdout and
 stderr again, each chunk as long after the start as it was recorded.
@@ -73,7 +77,13 @@ The start of an id is enough when it matches only one session.
   --timestamps, -t  Show every line with its recorded timestamp, the time since
                     the session started and its stream (stdout or stderr), the
                     command line first and the exit code last
-  --speed <n>       Play <n> times faster (default: 1); 0 writes everything at once`,
+  --speed <n>       Play <n> times faster (default: 1); 0 writes everything at once
+  --ui              Instead of writing the output here, serve a page on
+                    127.0.0.1 and print its address: it plays the session in a
+                    terminal in the browser, with a timeline that marks every
+                    change on the screen, to pause, rewind and fast-forward.
+                    Runs until Ctrl+C
+  --port <n>        Port for --ui (default: a free one)`,
 };
 
 const aliases: Record<string, string> = { enable: "on", disable: "off" };
@@ -207,14 +217,28 @@ const printList = async (b: Binrec, command?: string) => {
 const playSession = async (b: Binrec, args: string[]) => {
   let speed = 1;
   let timestamps = false;
-  while (args[0] === "--speed" || args[0] === "--timestamps" || args[0] === "-t") {
-    if (args[0] !== "--speed") {
-      timestamps = true;
+  let ui = false;
+  let port: number | undefined;
+  const flags = ["--speed", "--timestamps", "-t", "--ui", "--port"];
+  while (args[0] !== undefined && flags.includes(args[0])) {
+    const flag = args[0];
+    if (flag === "--timestamps" || flag === "-t" || flag === "--ui") {
+      if (flag === "--ui") ui = true;
+      else timestamps = true;
       args = args.slice(1);
       continue;
     }
-    speed = Number(args[1]);
+    const value = Number(args[1]);
     args = args.slice(2);
+    if (flag === "--port") {
+      if (!Number.isInteger(value) || value < 0 || value > 65535) {
+        console.error("binrec: --port must be a port number, 0 to 65535");
+        return 1;
+      }
+      port = value;
+      continue;
+    }
+    speed = value;
     if (!Number.isFinite(speed) || speed < 0) {
       console.error("binrec: --speed must be a number, 0 or more");
       return 1;
@@ -227,7 +251,17 @@ const playSession = async (b: Binrec, args: string[]) => {
   }
 
   try {
-    await b.play(id, { speed, timestamps });
+    if (!ui) {
+      await b.play(id, { speed, timestamps });
+      return 0;
+    }
+    const server = await b.playUi(id, { port, speed: speed || 1 });
+    console.log(`Playing ${id} at ${server.url}`);
+    console.log("Open it in your browser. Press Ctrl+C to stop.");
+    await new Promise<void>((resolve) => {
+      for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => resolve());
+    });
+    await server.stop();
     return 0;
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
