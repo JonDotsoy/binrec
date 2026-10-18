@@ -1,6 +1,6 @@
 {
   "name": "@jondotsoy/binrec",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Record and replay everything a command reads and writes: transparent PATH shims capture stdin, stdout, stderr and exit codes to ndjson, with terminal and browser playback",
   "keywords": [
     "cli",
