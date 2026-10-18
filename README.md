@@ -1,5 +1,7 @@
 # binrec
 
+![binrec recording a terminal session: a REC indicator over the terminal and the ndjson record it writes](docs/banner.svg)
+
 Record everything a command reads and writes.
 
 `binrec` puts a small shim in front of any binary on your `PATH`. Every time the binary runs, the shim passes stdin, stdout and stderr straight through to the real program and writes the whole session (arguments, every chunk of input and output, and the exit code) to an [ndjson](https://github.com/ndjson/ndjson-spec) file. You can use it from the command line or as a library, for example to check in tests exactly how your code called a tool.
