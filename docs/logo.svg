@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="340" height="100" viewBox="0 0 340 100" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace">
+<title>binrec</title>
+<defs>
+<radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+<stop offset="0" stop-color="#ff3b30" stop-opacity="0.35"/>
+<stop offset="1" stop-color="#ff3b30" stop-opacity="0"/>
+</radialGradient>
+</defs>
+<style>
+.word{fill:#1f2328}
+@media (prefers-color-scheme:dark){.word{fill:#e6edf3}}
+@keyframes blink{0%,55%{opacity:1}56%,100%{opacity:.25}}
+.rec{animation:blink 1.4s steps(1,end) infinite}
+</style>
+<circle class="rec" cx="50" cy="50" r="46" fill="url(#glow)"/>
+<circle class="rec" cx="50" cy="50" r="22" fill="#ff3b30"/>
+<text class="word" x="88" y="74" font-size="70" font-weight="700" letter-spacing="-2">binrec</text>
+</svg>

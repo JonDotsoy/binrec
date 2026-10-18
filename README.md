@@ -1,3 +1,5 @@
+<img src="docs/logo.svg" alt="binrec logo" align="right" width="200">
+
 # binrec
 
 Record everything a command reads and writes.
