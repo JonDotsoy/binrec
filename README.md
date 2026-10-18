@@ -74,11 +74,14 @@ Commands that consumed the most:
 
 Set `BINREC_HOME` to use a folder other than `~/.binrec`.
 
-Settings are saved in `~/.binrec/config.json`. For now it holds one setting, written by `binrec on` / `binrec off`:
+Settings are saved in `~/.binrec/config.json`:
 
 ```json
-{ "recording": false }
+{ "recording": false, "maxDepth": 10 }
 ```
+
+- `recording` is written by `binrec on` / `binrec off`.
+- `maxDepth` (default `10`) is how many binrec sessions can run nested inside each other. Every session sets `BINREC_DEPTH` to one more for the program it runs; a session past the limit prints an error and exits with code 1 without running the program. This stops a shim that ends up calling itself (for example through a symlinked `PATH` entry) instead of starting sessions forever.
 
 `~/.binrec` contains:
 
@@ -214,7 +217,7 @@ Each session has `sessionId`, `command`, `args`, `timestamp`, `exitCode` (`null`
 
 - When you run it on a terminal, binrec gives the program its own pseudo terminal, so interactive programs such as `vim`, `less` or `docker exec -it` work while they are recorded. Every key you type is recorded as `stdin` and everything the program draws as `stdout` (a terminal mixes stdout and stderr, so there are no `stderr` lines in that case).
 - When stdin or stdout is not a terminal (pipes, redirects, CI), binrec uses pipes and keeps stdout and stderr apart.
-- Shims are bash scripts and point at the Bun runtime and the binrec script that installed them.
+- Shims are `/bin/sh` scripts and point at the Bun runtime and the binrec script that installed them.
 
 ## Development
 

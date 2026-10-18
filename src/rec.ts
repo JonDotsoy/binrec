@@ -12,6 +12,12 @@ export type RecOptions = {
 export type Config = {
   /** `false` turns recording off for every shim; shims keep running the real binary. */
   recording?: boolean;
+  /**
+   * How many binrec sessions can run nested inside each other (default 10). A
+   * session past the limit fails instead of running, which stops a shim that
+   * ends up calling itself.
+   */
+  maxDepth?: number;
 };
 
 /** Reads a binrec `config.json`; a missing or unreadable file means the defaults. */
@@ -30,6 +36,11 @@ export type RecResult = {
   /** Absolute path of the ndjson record, or `null` when nothing was recorded. */
   recordPath: string | null;
 };
+
+/** Environment variable with how many binrec sessions the process runs inside. */
+export const DEPTH_ENV = "BINREC_DEPTH";
+/** Nesting limit used when `config.json` has no `maxDepth`. */
+export const DEFAULT_MAX_DEPTH = 10;
 
 /** Marker file older binrec versions used to turn recording off; still honored. */
 export const DISABLED_MARKER = ".disabled";
@@ -118,6 +129,7 @@ const forwardSignals = (
 const recInTerminal = async (
   command: string,
   args: string[],
+  env: Record<string, string | undefined>,
   write: Write,
   started: Started,
 ) => {
@@ -156,7 +168,7 @@ const recInTerminal = async (
 
   let stopForwarding = () => {};
   try {
-    const child = Bun.spawn([command, ...args], { terminal });
+    const child = Bun.spawn([command, ...args], { terminal, env });
     started(child.pid);
     write({ type: "resize", ...stamp(), ...size() });
     stdin.on("data", onInput);
@@ -178,8 +190,15 @@ const recInTerminal = async (
 };
 
 /** Runs the command with piped stdio, keeping stdout and stderr apart. */
-const recInPipes = async (command: string, args: string[], write: Write, started: Started) => {
+const recInPipes = async (
+  command: string,
+  args: string[],
+  env: Record<string, string | undefined>,
+  write: Write,
+  started: Started,
+) => {
   const child = Bun.spawn([command, ...args], {
+    env,
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
@@ -241,6 +260,10 @@ const recInPipes = async (command: string, args: string[], write: Write, started
  *
  * After the session, `{ sessionId, command, total }` is written to `<records>/<sessionId>.stats.json`.
  *
+ * The program gets `BINREC_DEPTH` set to one more than binrec's own. When
+ * binrec's `BINREC_DEPTH` already reached `maxDepth` from `config.json` (10 by
+ * default), the program is not run: binrec prints an error and returns exit code 1.
+ *
  * When both stdin and stdout are a terminal, the program runs on a pseudo
  * terminal so interactive programs keep working; otherwise it runs with pipes.
  * On a pseudo terminal SIGINT and SIGQUIT are passed on too; with pipes the
@@ -253,13 +276,29 @@ export const rec = async (
 ): Promise<RecResult> => {
   const command = isAbsolute(target) ? target : (Bun.which(target) ?? resolve(target));
 
+  const config = options.config === undefined ? {} : await readConfig(options.config);
+
+  // A shim that resolves to itself would start sessions forever; every session
+  // counts itself in BINREC_DEPTH so the loop stops at maxDepth.
+  const depth = Number.parseInt(process.env[DEPTH_ENV] ?? "", 10) || 0;
+  const maxDepth =
+    typeof config.maxDepth === "number" && config.maxDepth > 0 ? config.maxDepth : DEFAULT_MAX_DEPTH;
+  if (depth >= maxDepth) {
+    console.error(
+      `binrec: ${command} not run, ${depth} binrec sessions are already nested (maxDepth ${maxDepth}); a shim may be calling itself`,
+    );
+    return { exitCode: 1, sessionId: null, recordPath: null };
+  }
+  const env = { ...process.env, [DEPTH_ENV]: String(depth + 1) };
+
   const records = options.records === false ? null : resolve(options.records);
   const recordingOff =
     !records ||
-    (options.config !== undefined && (await readConfig(options.config)).recording === false) ||
+    config.recording === false ||
     (await Bun.file(join(records, DISABLED_MARKER)).exists());
   if (recordingOff) {
     const child = Bun.spawn([command, ...args], {
+      env,
       stdin: "inherit",
       stdout: "inherit",
       stderr: "inherit",
@@ -286,8 +325,8 @@ export const rec = async (
 
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
   const exitCode = interactive
-    ? await recInTerminal(command, args, write, started)
-    : await recInPipes(command, args, write, started);
+    ? await recInTerminal(command, args, env, write, started)
+    : await recInPipes(command, args, env, write, started);
 
   write({ type: "end", ...stamp(), exitCode, total });
   await record.end();
