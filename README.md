@@ -17,14 +17,13 @@ bun add @jondotsoy/binrec      # the library
 
 ## CLI
 
-Create the shim folder (`~/.binrec/bin`) and add it to the start of your `PATH` in `~/.bashrc`:
+Create the shim folder (`~/.binrec/bin`) and see the lines to add to `~/.bashrc` so it comes first in your `PATH`:
 
 ```sh
 binrec init
-source ~/.bashrc
 ```
 
-`binrec init` writes the `export` lines between `# >>> binrec >>>` and `# <<< binrec <<<`, so running it again updates that block instead of adding another one. When `BINREC_HOME` is not the default `~/.binrec`, the block exports it too. Use `binrec init --rc ~/.zshrc` to configure another startup file, or `binrec install` to only create the folder and print the line to add yourself.
+`binrec init` does not change any file: copy the `export` lines it prints into `~/.bashrc` (or your shell's startup file) and reload it with `source ~/.bashrc`. When `BINREC_HOME` is not the default `~/.binrec`, it prints an `export BINREC_HOME=…` line too. `binrec install` without a binary does the same.
 
 Install a shim for a binary:
 
@@ -51,8 +50,7 @@ binrec rec --records ./records /usr/bin/date +%F
 
 | Command | What it does |
 | --- | --- |
-| `binrec init [--rc <file>]` | Creates the shim folder and adds a marked block to `~/.bashrc` (or `<file>`) that exports `PATH` with the shim folder first (and `BINREC_HOME` when it is not the default). Running it again updates the block. |
-| `binrec install` | Creates the shim folder and prints the `PATH` line for `~/.bashrc`. |
+| `binrec init` | Creates the shim folder and prints the `export` lines to add to `~/.bashrc`: `PATH` with the shim folder first, and `BINREC_HOME` when it is not the default. It does not change any file. `binrec install` without a binary is the same. |
 | `binrec install <bin>` | Installs a shim for `<bin>`. |
 | `binrec uninstall <bin>` | Removes the shim for `<bin>`. Its recorded sessions are kept. |
 | `binrec uninstall --all` | Removes every shim in the shim folder. Recorded sessions are kept. |
@@ -200,7 +198,7 @@ session?.lines;    // every ndjson line of the session
 | `binrec.create({ path?, records? })` | Creates an instance. `path` is the shim folder (default `~/.binrec/bin`), `records` the records folder (default `records` next to `path`). |
 | `b.path`, `b.records`, `b.config` | Absolute paths of the shim folder, the records folder and `config.json`. |
 | `b.init()` | Creates the shim folder. |
-| `b.initShell({ rc? })` | Creates the shim folder and adds or updates the binrec block in `rc` (default `~/.bashrc`), like `binrec init`. Returns `{ rc, lines, changed }`; `changed` is `false` when the block was already up to date. |
+| `b.shellLines()` | The `export` lines `binrec init` prints, as an array of strings. Nothing is written. |
 | `b.install(command)` | Installs a shim for `command` and returns its path. Throws if the command is not found. |
 | `b.uninstall(command)` | Removes the shim for `command` and returns its path, or `null` if there was none. Only removes files binrec wrote; records are kept. |
 | `b.uninstallAll()` | Removes every binrec shim in the shim folder and returns their paths. Other files are left alone. |

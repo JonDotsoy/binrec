@@ -5,10 +5,8 @@ const usage = (b: Binrec) => `Usage:
   binrec --help            Show this help (also: -h); binrec <command> --help
                            shows the help of one command
   binrec --version         Print the binrec version
-  binrec init [--rc <file>]
-                           Create ${b.path} and add it to PATH in ~/.bashrc
-                           (or <file>), first so shims take over
-  binrec install           Create ${b.path} and show how to add it to PATH
+  binrec init              Create ${b.path} and show the export lines to add
+                           to ~/.bashrc so it comes first in PATH (also: binrec install)
   binrec install <bin>     Install a shim for <bin> in ${b.path}
   binrec uninstall <bin>   Remove the shim for <bin> (records are kept)
   binrec uninstall --all   Remove every shim in ${b.path} (records are kept)
@@ -32,18 +30,17 @@ const usage = (b: Binrec) => `Usage:
 
 /** Help of each command, shown by `binrec <command> --help`. */
 const commandHelp: Record<string, (b: Binrec) => string> = {
-  init: (b) => `Usage: binrec init [--rc <file>]
+  init: (b) => `Usage: binrec init
 
-Create ${b.path} and configure ~/.bashrc so new shells have it at the start
-of PATH, before the real binaries, and the shims take over. The lines go in a
-block between "# >>> binrec >>>" and "# <<< binrec <<<"; running binrec init
-again updates that block instead of adding another one. BINREC_HOME is
-exported too when it is not the default ~/.binrec.
-
-  --rc <file>   Startup file to configure instead of ~/.bashrc (e.g. ~/.zshrc)`,
+Create ${b.path} and show the export lines to add to ~/.bashrc (or the
+startup file of your shell) so new shells have it at the start of PATH,
+before the real binaries, and the shims take over. BINREC_HOME is exported
+too when it is not the default ~/.binrec. No file is changed: add the lines
+yourself. Also: binrec install`,
   install: (b) => `Usage: binrec install [<bin>]
 
-Without <bin>, create ${b.path} and show the line that adds it to PATH.
+Without <bin>, same as binrec init: create ${b.path} and show the lines
+that add it to PATH.
 With <bin>, resolve the real path of <bin> and install a shim for it in
 ${b.path} that runs it through binrec rec, so every call is recorded in
 ${b.records}.`,
@@ -112,43 +109,20 @@ const isHelpFlag = (arg?: string) => arg === "--help" || arg === "-h";
 const wantsHelp = (command: string, rest: string[]) =>
   isHelpFlag(rest[0]) && (command !== "rec" || rest.length === 1);
 
-const init = async (b: Binrec, args: string[]) => {
-  let rc: string | undefined;
-  while (args[0] === "--rc") {
-    rc = args[1];
-    args = args.slice(2);
-    if (!rc) {
-      console.error("binrec: --rc needs a file");
-      return 1;
-    }
-  }
-  if (args[0] !== undefined) {
-    console.error(usage(b));
-    return 1;
-  }
-
-  const result = await b.initShell({ rc });
-  console.log(result.changed ? `Configured ${result.rc}:` : `${result.rc} is already configured:`);
+const init = async (b: Binrec) => {
+  await b.init();
+  console.log(`binrec bin directory ready: ${b.path}`);
   console.log("");
-  for (const line of result.lines) console.log(`  ${line}`);
+  console.log("Add it to the start of your PATH by appending these lines to ~/.bashrc:");
   console.log("");
-  console.log(`Open a new shell or run: source ${showArg(result.rc)}`);
+  for (const line of b.shellLines()) console.log(`  ${line}`);
+  console.log("");
+  console.log("Then reload your shell with: source ~/.bashrc");
   return 0;
 };
 
 const install = async (b: Binrec, command?: string) => {
-  if (!command) {
-    await b.init();
-    console.log(`binrec bin directory ready: ${b.path}`);
-    console.log("");
-    console.log("Add it to the start of your PATH by appending this line to ~/.bashrc");
-    console.log("(binrec init does it for you):");
-    console.log("");
-    console.log(`  export PATH="${b.path}:$PATH"`);
-    console.log("");
-    console.log("Then reload your shell with: source ~/.bashrc");
-    return 0;
-  }
+  if (!command) return init(b);
 
   try {
     const shimPath = await b.install(command);
@@ -332,7 +306,7 @@ export const runCli = async (argv: string[]) => {
       console.log(version);
       process.exit(0);
     case "init":
-      process.exit(await init(b, rest));
+      process.exit(await init(b));
     case "install":
       process.exit(await install(b, rest[0]));
     case "uninstall":

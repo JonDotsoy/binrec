@@ -6,7 +6,7 @@ import { play, type PlayOptions } from "./play.ts";
 import { playUi, type PlayUiOptions, type PlayUiServer } from "./ui/server.ts";
 import { findSession, lastSession, sessions, type Session } from "./sessions.ts";
 import { stats, type Stats } from "./stats.ts";
-import { initShell, type InitShellOptions, type InitShellResult } from "./shell.ts";
+import { shellLines } from "./shell.ts";
 
 export { rec } from "./rec.ts";
 export { play } from "./play.ts";
@@ -16,7 +16,6 @@ export type { PlayUiOptions, PlayUiServer } from "./ui/server.ts";
 export type { Config, RecOptions, RecResult } from "./rec.ts";
 export type { RecordLine, Session } from "./sessions.ts";
 export type { CommandStats, Stats } from "./stats.ts";
-export type { InitShellOptions, InitShellResult } from "./shell.ts";
 
 export type CreateOptions = {
   /** Folder where shims are installed. Defaults to `$BINREC_HOME/bin` or `~/.binrec/bin`. */
@@ -35,11 +34,10 @@ export type Binrec = {
   /** Creates the bin folder if it does not exist yet. */
   init(): Promise<void>;
   /**
-   * Creates the bin folder and adds a marked block to `~/.bashrc` (or `options.rc`)
-   * that exports PATH with the bin folder first. Running it again updates the block
-   * instead of adding another one.
+   * The `export` lines to add to `~/.bashrc` so the bin folder comes first in PATH
+   * (and `BINREC_HOME` is set when it is not the default). Nothing is written.
    */
-  initShell(options?: InitShellOptions): Promise<InitShellResult>;
+  shellLines(): string[];
   /** Installs a shim for `command` and returns the shim's path. */
   install(command: string): Promise<string>;
   /**
@@ -188,10 +186,7 @@ const create = (options: CreateOptions = {}): Binrec => {
     records,
     config,
     init,
-    initShell: async (options) => {
-      await init();
-      return initShell(path, options);
-    },
+    shellLines: () => shellLines(path),
     install,
     uninstall,
     uninstallAll,
