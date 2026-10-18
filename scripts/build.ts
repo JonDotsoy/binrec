@@ -39,11 +39,13 @@ await Bun.write(
       description: pkg.description,
       license: pkg.license,
       author: pkg.author,
+      homepage: pkg.homepage,
+      bugs: pkg.bugs,
       type: "module",
       module: "binrec.js",
       exports: { ".": "./binrec.js" },
       bin: { binrec: "binrec.js" },
-      repository: { type: "git", url: "git+https://github.com/JonDotsoy/binrec.git" },
+      repository: pkg.repository,
       // The root package.json stays `private` so it is never published by
       // mistake; dist is published to npm as a public package.
       publishConfig: { registry: "https://registry.npmjs.org/", access: "public" },

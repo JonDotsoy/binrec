@@ -24,7 +24,9 @@ test("build writes dist/binrec.js, dist/package.json, README.md and LICENSE", as
   expect(pkg).toMatchObject({
     name: "@jondotsoy/binrec",
     license: "MIT",
-    author: "Jonathan Delgado <hi@jon.soy> (https://jon.soy)",
+    author: { name: "Jonathan Delgado", email: "hi@jon.soy", url: "https://jon.soy" },
+    bugs: { url: "https://github.com/JonDotsoy/binrec/issues", email: "hi@jon.soy" },
+    repository: { type: "git", url: "git+https://github.com/JonDotsoy/binrec.git" },
     version: (await Bun.file(join(root, "package.json")).json()).version,
     publishConfig: { registry: "https://registry.npmjs.org/", access: "public" },
     exports: { ".": "./binrec.js" },

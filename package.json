@@ -3,7 +3,20 @@
   "version": "0.0.2",
   "description": "Record everything a command reads and writes",
   "license": "MIT",
-  "author": "Jonathan Delgado <hi@jon.soy> (https://jon.soy)",
+  "author": {
+    "name": "Jonathan Delgado",
+    "email": "hi@jon.soy",
+    "url": "https://jon.soy"
+  },
+  "homepage": "https://github.com/JonDotsoy/binrec#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JonDotsoy/binrec.git"
+  },
+  "bugs": {
+    "url": "https://github.com/JonDotsoy/binrec/issues",
+    "email": "hi@jon.soy"
+  },
   "module": "index.ts",
   "exports": {
     ".": "./index.ts"
