@@ -391,7 +391,7 @@ footer p { color: rgba(255,255,255,.7); font-size: var(--text-body-sm); margin: 
             <button type="button" data-copy="#install-cmd">Copy</button>
           </div>
         </div>
-        <p class="hero-note">Requires <a href="https://bun.sh">Bun</a>. Or install it globally with <code>bun add -g @jondotsoy/binrec</code>.</p>
+        <p class="hero-note">Requires <a href="https://bun.sh">Bun</a>. Run <code>bunx @jondotsoy/binrec init</code> first to see the <code>PATH</code> line for your shell, or install it globally with <code>bun add -g @jondotsoy/binrec</code>.</p>
       </div>
 
       <div class="stack" aria-hidden="true">
@@ -502,7 +502,7 @@ Installed <span class="v">/home/you/.binrec/bin/date</span>
         <div class="panel" role="tabpanel" id="panel-install" aria-labelledby="tab-install">
           <div class="panel-copy">
             <h3>Put a shim in front of any binary</h3>
-            <p><code>binrec install</code> creates <code>~/.binrec/bin</code> and prints the <code>PATH</code> line for your shell. <code>binrec install &lt;bin&gt;</code> adds a shim for one command.</p>
+            <p><code>binrec init</code> creates <code>~/.binrec/bin</code> and prints the <code>PATH</code> line to add to your shell, without changing any file. Run it directly with <code>bunx @jondotsoy/binrec init</code>. <code>binrec install &lt;bin&gt;</code> adds a shim for one command.</p>
             <ul>
               <li><code>binrec uninstall &lt;bin&gt;</code> removes it. Records are kept.</li>
               <li><code>binrec rec /usr/bin/date +%F</code> records a single run without a shim.</li>
@@ -510,11 +510,13 @@ Installed <span class="v">/home/you/.binrec/bin/date</span>
             </ul>
           </div>
           <div class="panel-term">
-<pre class="term"><span class="p">$</span> bunx @jondotsoy/binrec install date
-Installed <span class="v">/home/you/.binrec/bin/date</span>
+<pre class="term"><span class="p">$</span> bunx @jondotsoy/binrec init
+binrec bin directory ready: <span class="v">/home/you/.binrec/bin</span>
+<span class="dim"># add it to ~/.bashrc so the shims come first</span>
+  export PATH="$HOME/.binrec/bin:$PATH"
 
-<span class="dim"># put the shims first in PATH</span>
-<span class="p">$</span> export PATH="$HOME/.binrec/bin:$PATH"
+<span class="p">$</span> bunx @jondotsoy/binrec install date
+Installed <span class="v">/home/you/.binrec/bin/date</span>
 
 <span class="p">$</span> date +%F
 2026-10-18
