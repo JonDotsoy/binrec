@@ -48,12 +48,10 @@ jobs:
 
       - name: Pack dist
         id: pack
-        working-directory: dist
-        run: echo "tarball=$RUNNER_TEMP/$(npm pack --silent --pack-destination "$RUNNER_TEMP")" >> "$GITHUB_OUTPUT"
+        run: echo "tarball=$RUNNER_TEMP/$(npm pack dist/ --silent --pack-destination "$RUNNER_TEMP")" >> "$GITHUB_OUTPUT"
 
       - name: Publish dist to npm
-        working-directory: dist
-        run: npm publish --access restricted
+        run: npm publish dist/
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
