@@ -1,4 +1,4 @@
-import { mkdir, chmod, readdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { DISABLED_MARKER, readConfig, type Config, rec } from "./rec.ts";
@@ -7,6 +7,7 @@ import { playUi, type PlayUiOptions, type PlayUiServer } from "./ui/server.ts";
 import { findSession, lastSession, sessionTree, sessions, type Session, type TreeSession } from "./sessions.ts";
 import { stats, type Stats } from "./stats.ts";
 import { shellLines } from "./shell.ts";
+import { isShim, writeShim } from "./shim.ts";
 
 export { rec } from "./rec.ts";
 export { play, playTree } from "./play.ts";
@@ -94,31 +95,8 @@ export type Binrec = {
   stats(): Promise<Stats>;
 };
 
-// Set by scripts/build.ts: in dist/binrec.js the bundle itself is the CLI.
-declare const BINREC_BUNDLED: boolean | undefined;
-
-/** Script the shims run as `bun <cliEntry> rec …`. */
-const cliEntry =
-  typeof BINREC_BUNDLED !== "undefined" && BINREC_BUNDLED
-    ? import.meta.path
-    : resolve(import.meta.dir, "../bin/binrec.ts");
-
 export const defaultPath = () =>
   join(process.env.BINREC_HOME ?? join(homedir(), ".binrec"), "bin");
-
-/**
- * Every shim starts with these lines, so `uninstall` never removes a file binrec did not write.
- * The shell is an absolute path: `#!/usr/bin/env bash` looks bash up in PATH, so a
- * shim for `bash` would run itself forever.
- */
-const SHIM_HEADER = "#!/bin/sh\nexec ";
-/** Header of shims written by binrec 0.0.5 and older. */
-const LEGACY_SHIM_HEADER = "#!/usr/bin/env bash\nexec ";
-const isShim = (content: string) =>
-  (content.startsWith(SHIM_HEADER) || content.startsWith(LEGACY_SHIM_HEADER)) &&
-  content.includes(" rec --records ");
-
-const shellQuote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 
 /** Looks up a command in PATH, skipping `binDir` so a shim never resolves to itself. */
 const whichOutside = (command: string, binDir: string) => {
@@ -145,13 +123,7 @@ const create = (options: CreateOptions = {}): Binrec => {
     await init();
 
     const shimPath = join(path, basename(command));
-    const shim = [
-      `${SHIM_HEADER}${shellQuote(process.execPath)} ${shellQuote(cliEntry)} rec --records ${shellQuote(records)} --config ${shellQuote(config)} ${shellQuote(target)} "$@"`,
-      "",
-    ].join("\n");
-
-    await Bun.write(shimPath, shim);
-    await chmod(shimPath, 0o755);
+    await writeShim(shimPath, { target, records, config });
     return shimPath;
   };
 

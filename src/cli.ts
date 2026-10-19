@@ -28,8 +28,9 @@ const usage = (b: Binrec) => `Usage:
                            Serve a page that plays the recorded sessions in a
                            terminal in the browser: a panel to pick one, every
                            process of its run on a timeline, rewind and fast-forward
-  binrec rec [--records <dir>] [--config <file>] <path> [...]
-                           Run <path> passing stdio through and record it in ${b.records}`;
+  binrec rec [--records <dir>] [--config <file>] [--shim <cmd>,...] <path> [...]
+                           Run <path> passing stdio through and record it in ${b.records};
+                           --shim also records the runs of <cmd> inside it`;
 
 /** Help of each command, shown by `binrec <command> --help`. */
 const commandHelp: Record<string, (b: Binrec) => string> = {
@@ -65,14 +66,18 @@ Also: binrec disable [<bin> | --all]`,
 
 Show how many sessions are recorded in ${b.records}, how many bytes they
 consumed in total, and rank the commands that consumed the most.`,
-  rec: (b) => `Usage: binrec rec [--records <dir>] [--config <file>] <path> [...]
+  rec: (b) => `Usage: binrec rec [--records <dir>] [--config <file>] [--shim <cmd>[,<cmd>...]]... <path> [...]
 
 Run <path> with the given arguments, pass stdin, stdout and stderr through,
 record the session and exit with the program's exit code. Only a lone
 binrec rec --help shows this help; any other --help goes to the program.
 
   --records <dir>   Folder for the records (default: ${b.records})
-  --config <file>   Settings file to read (default: ${b.config})`,
+  --config <file>   Settings file to read (default: ${b.config})
+  --shim <cmd>      Also record every run of <cmd> inside the session, as a
+                    session of its own: binrec puts a shim for it in a
+                    temporary folder first in the program's PATH. Repeat it
+                    or separate commands with commas: --shim curl,ls`,
   list: (b) => `Usage: binrec list [<bin>]
 
 List the sessions recorded in ${b.records}, oldest first, with their id,
@@ -352,16 +357,18 @@ export const runCli = async (argv: string[]) => {
     case "rec": {
       let records = b.records;
       let config: string | undefined = b.config;
-      while (rest[0] === "--records" || rest[0] === "--config") {
+      const shims: string[] = [];
+      while (rest[0] === "--records" || rest[0] === "--config" || rest[0] === "--shim") {
         const [flag, value] = rest.splice(0, 2);
         if (flag === "--records") records = value ?? records;
-        else config = value;
+        else if (flag === "--config") config = value;
+        else shims.push(...(value ?? "").split(",").filter(Boolean));
       }
       if (!rest[0]) {
         console.error(usage(b));
         process.exit(1);
       }
-      const { exitCode } = await binrec.rec(rest[0], rest.slice(1), { records, config });
+      const { exitCode } = await binrec.rec(rest[0], rest.slice(1), { records, config, shims });
       process.exit(exitCode);
     }
     default:
