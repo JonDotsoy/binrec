@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, open, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, delimiter, isAbsolute, join, resolve } from "node:path";
-import { isShim, writeShim } from "./shim.ts";
+import { isShim, linkPathCommands, SHIM_ALL_EXCLUDED, writeDispatcher, writeShim } from "./shim.ts";
 import { writeSessionStats } from "./stats.ts";
 
 export type RecOptions = {
@@ -16,6 +16,15 @@ export type RecOptions = {
    * binrec shims; an absolute path is used as is.
    */
   shims?: string[];
+  /**
+   * Records every command the program looks up in `PATH`, not only `shims`:
+   * each name found in `PATH` gets a link to a dispatcher that finds the real
+   * binary at run time. `SHIM_ALL_EXCLUDED` and `noShims` are left out, unless
+   * also listed in `shims`.
+   */
+  shimAll?: boolean;
+  /** Names `shimAll` leaves out, besides `SHIM_ALL_EXCLUDED`. */
+  noShims?: string[];
 };
 
 export type Config = {
@@ -311,6 +320,8 @@ const whichReal = async (command: string) => {
  * With `shims`, binrec writes a shim for each of those commands in a temporary
  * folder, puts it first in the program's `PATH` and removes it after the
  * session; the `command` line then also carries `shims`, the shimmed names.
+ * With `shimAll`, the same folder also links every other name in `PATH` to a
+ * dispatcher (see `writeDispatcher`), and the `command` line has `shimAll: true`.
  *
  * When both stdin and stdout are a terminal, the program runs on a pseudo
  * terminal so interactive programs keep working; otherwise it runs with pipes.
@@ -390,7 +401,10 @@ export const rec = async (
   };
 
   // The command line goes first, as soon as the program has a pid.
-  const shimmed = shims.length ? { shims: shims.map(({ name }) => name) } : {};
+  const shimmed = {
+    ...(shims.length ? { shims: shims.map(({ name }) => name) } : {}),
+    ...(options.shimAll ? { shimAll: true } : {}),
+  };
   const started: Started = (pid) =>
     write({ type: "command", sessionId, ...stamp(), command, args, pid, parent, depth, ...shimmed });
 
@@ -400,8 +414,13 @@ export const rec = async (
   let exitCode: number;
   let shimDir: string | null = null;
   try {
-    if (shims.length) {
+    if (shims.length || options.shimAll) {
       shimDir = await mkdtemp(join(tmpdir(), "binrec-shims-"));
+      if (options.shimAll) {
+        await writeDispatcher(shimDir, { records, config: options.config });
+        const skip = new Set([...SHIM_ALL_EXCLUDED, ...(options.noShims ?? []), ...shims.map(({ name }) => name)]);
+        await linkPathCommands(shimDir, skip);
+      }
       for (const { name, target } of shims) {
         await writeShim(join(shimDir, name), { target, records, config: options.config });
       }

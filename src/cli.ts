@@ -28,9 +28,10 @@ const usage = (b: Binrec) => `Usage:
                            Serve a page that plays the recorded sessions in a
                            terminal in the browser: a panel to pick one, every
                            process of its run on a timeline, rewind and fast-forward
-  binrec rec [--records <dir>] [--config <file>] [--shim <cmd>,...] <path> [...]
+  binrec rec [--records <dir>] [--config <file>] [--shim <cmd>,... | --shim-all] <path> [...]
                            Run <path> passing stdio through and record it in ${b.records};
-                           --shim also records the runs of <cmd> inside it`;
+                           --shim also records the runs of <cmd> inside it,
+                           --shim-all the runs of every command in PATH`;
 
 /** Help of each command, shown by `binrec <command> --help`. */
 const commandHelp: Record<string, (b: Binrec) => string> = {
@@ -66,7 +67,8 @@ Also: binrec disable [<bin> | --all]`,
 
 Show how many sessions are recorded in ${b.records}, how many bytes they
 consumed in total, and rank the commands that consumed the most.`,
-  rec: (b) => `Usage: binrec rec [--records <dir>] [--config <file>] [--shim <cmd>[,<cmd>...]]... <path> [...]
+  rec: (b) => `Usage: binrec rec [--records <dir>] [--config <file>] [--shim <cmd>[,<cmd>...]]...
+                  [--shim-all [--no-shim <cmd>[,<cmd>...]]...] <path> [...]
 
 Run <path> with the given arguments, pass stdin, stdout and stderr through,
 record the session and exit with the program's exit code. Only a lone
@@ -77,7 +79,13 @@ binrec rec --help shows this help; any other --help goes to the program.
   --shim <cmd>      Also record every run of <cmd> inside the session, as a
                     session of its own: binrec puts a shim for it in a
                     temporary folder first in the program's PATH. Repeat it
-                    or separate commands with commas: --shim curl,ls`,
+                    or separate commands with commas: --shim curl,ls
+  --shim-all        Record every command the program finds in PATH. Each run
+                    costs about 50 ms more. Builtins such as echo and full
+                    paths such as /usr/bin/ls are not recorded. bun, sudo,
+                    ssh, stty and a few others are left out unless named
+                    with --shim.
+  --no-shim <cmd>   Leave <cmd> out of --shim-all`,
   list: (b) => `Usage: binrec list [<bin>]
 
 List the sessions recorded in ${b.records}, oldest first, with their id,
@@ -358,17 +366,25 @@ export const runCli = async (argv: string[]) => {
       let records = b.records;
       let config: string | undefined = b.config;
       const shims: string[] = [];
-      while (rest[0] === "--records" || rest[0] === "--config" || rest[0] === "--shim") {
+      const noShims: string[] = [];
+      let shimAll = false;
+      const flags = ["--records", "--config", "--shim", "--shim-all", "--no-shim"];
+      while (flags.includes(rest[0] ?? "")) {
+        if (rest[0] === "--shim-all") {
+          rest.shift();
+          shimAll = true;
+          continue;
+        }
         const [flag, value] = rest.splice(0, 2);
         if (flag === "--records") records = value ?? records;
         else if (flag === "--config") config = value;
-        else shims.push(...(value ?? "").split(",").filter(Boolean));
+        else (flag === "--shim" ? shims : noShims).push(...(value ?? "").split(",").filter(Boolean));
       }
       if (!rest[0]) {
         console.error(usage(b));
         process.exit(1);
       }
-      const { exitCode } = await binrec.rec(rest[0], rest.slice(1), { records, config, shims });
+      const { exitCode } = await binrec.rec(rest[0], rest.slice(1), { records, config, shims, shimAll, noShims });
       process.exit(exitCode);
     }
     default:
