@@ -41,6 +41,9 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      # test/ui-browser.test.ts drives the play --ui page in headless Chromium.
+      - run: bunx playwright-core install --with-deps --only-shell chromium
+
       - name: Bump version
         id: version
         run: |

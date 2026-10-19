@@ -46,6 +46,12 @@ export const DEPTH_ENV = "BINREC_DEPTH";
  */
 export const commandDepthEnv = (command: string) =>
   `${DEPTH_ENV}_${basename(command).toUpperCase().replace(/[^A-Z0-9]/g, "_")}`;
+/**
+ * Environment variable with the id of the session the process runs inside. A
+ * session started from a recorded one (a command run from a recorded shell)
+ * saves that id as `parent` on its `command` line.
+ */
+export const SESSION_ENV = "BINREC_SESSION";
 /** Nesting limit of one command used when `config.json` has no `maxDepth`. */
 export const DEFAULT_MAX_DEPTH = 10;
 
@@ -254,8 +260,10 @@ const recInPipes = async (
  * real binary while recording every chunk to `<records>/<sessionId>.ndjson`.
  *
  * Record lines, in order:
- * - `{ type: "command", sessionId, timestamp, performance, command, args, pid }`, where
- *   `pid` is the process id of the recorded program
+ * - `{ type: "command", sessionId, timestamp, performance, command, args, pid, parent, depth }`,
+ *   where `pid` is the process id of the recorded program, `parent` is the id of the
+ *   session it ran inside (`BINREC_SESSION`) or `null`, and `depth` is how many
+ *   binrec sessions it ran inside (`BINREC_DEPTH`, `0` when run on its own)
  * - `{ type: "stdin" | "stdout" | "stderr", timestamp, performance, size, data }`, where
  *   `size` is the chunk's length in bytes, and `data` is `null` and `data_base64`
  *   holds the bytes if the chunk is not valid UTF-8
@@ -271,7 +279,8 @@ const recInPipes = async (
  * `BINREC_DEPTH_<COMMAND>` (sessions of this command, see `commandDepthEnv`) set
  * to one more than binrec's own. When `BINREC_DEPTH_<COMMAND>` already reached
  * `maxDepth` from `config.json` (10 by default), the program is not run: binrec
- * prints an error and returns exit code 1. `BINREC_DEPTH` has no limit.
+ * prints an error and returns exit code 1. `BINREC_DEPTH` has no limit. While
+ * the session is recorded, the program also gets `BINREC_SESSION` set to its id.
  *
  * When both stdin and stdout are a terminal, the program runs on a pseudo
  * terminal so interactive programs keep working; otherwise it runs with pipes.
@@ -324,6 +333,9 @@ export const rec = async (
   }
 
   const sessionId = crypto.randomUUID();
+  const inherited = process.env[SESSION_ENV];
+  const parent = inherited && /^[\w-]+$/.test(inherited) ? inherited : null;
+  env[SESSION_ENV] = sessionId;
   const recordPath = join(records, `${sessionId}.ndjson`);
 
   // Records hold everything the program read and printed, so only the user who
@@ -338,7 +350,7 @@ export const rec = async (
   };
 
   // The command line goes first, as soon as the program has a pid.
-  const started: Started = (pid) => write({ type: "command", sessionId, ...stamp(), command, args, pid });
+  const started: Started = (pid) => write({ type: "command", sessionId, ...stamp(), command, args, pid, parent, depth });
 
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
   const exitCode = interactive

@@ -70,7 +70,7 @@ test("dist/binrec.js play --ui serves the player with xterm.js from the bundle",
   try {
     expect(await fetch(new URL("/xterm.js", server.url)).then((r) => r.text())).toContain("Terminal");
     expect(await fetch(new URL("/player.js", server.url)).then((r) => r.text())).toStartWith("(function player()");
-    expect((await fetch(new URL("/session.json", server.url)).then((r) => r.json())).sessionId).toBe(last.sessionId);
+    expect((await fetch(new URL("/sessions.json", server.url)).then((r) => r.json())).selected).toBe(last.sessionId);
   } finally {
     await server.stop();
   }

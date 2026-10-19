@@ -63,8 +63,15 @@ test("binrec play --ui serves the player, xterm.js and the session until Ctrl+C"
     expect(await fetch(new URL("/xterm.js", url)).then((r) => r.text())).toContain("Terminal");
     expect(await fetch(new URL("/player.js", url)).then((r) => r.text())).toStartWith("(function player()");
 
-    const session = await fetch(new URL("/session.json", url)).then((r) => r.json());
-    expect(session).toMatchObject({ sessionId, exitCode: 3, tty: false, cols: 80, rows: 24, speed: 1 });
+    const index = await fetch(new URL("/sessions.json", url)).then((r) => r.json());
+    expect(index).toMatchObject({ speed: 1, selected: sessionId });
+    expect(index.sessions.map((listed: { sessionId: string }) => listed.sessionId)).toContain(sessionId);
+
+    const tree = await fetch(new URL(`/tree.json?id=${sessionId}`, url)).then((r) => r.json());
+    expect(tree).toMatchObject({ speed: 1, selected: 0 });
+    expect(tree.sessions).toHaveLength(1);
+    const [session] = tree.sessions;
+    expect(session).toMatchObject({ sessionId, exitCode: 3, tty: false, cols: 80, rows: 24, speed: 1, parent: null, depth: 0, offset: 0 });
     expect(session.events.map((event: { type: string; data: string }) => [event.type, event.data])).toEqual([
       ["stdout", Buffer.from("uno").toString("base64")],
       ["stderr", Buffer.from("dos").toString("base64")],
@@ -74,6 +81,8 @@ test("binrec play --ui serves the player, xterm.js and the session until Ctrl+C"
     expect(session.duration).toBeGreaterThanOrEqual(session.events[2].t);
 
     expect((await fetch(new URL("/nope", url))).status).toBe(404);
+    expect((await fetch(new URL("/tree.json?id=nope", url))).status).toBe(404);
+    expect((await fetch(new URL("/tree.json?id=../x", url))).status).toBe(404);
     expect((await fetch(url, { method: "POST" })).status).toBe(404);
   } finally {
     child.kill("SIGINT");
@@ -100,11 +109,31 @@ test("binrec play --ui starts the page at --speed", async () => {
   const sessionId = await record("echo", "rápido");
   const { child, url } = await startUi("--speed", "4", sessionId);
   try {
-    expect((await fetch(new URL("/session.json", url)).then((r) => r.json())).speed).toBe(4);
+    expect((await fetch(new URL("/sessions.json", url)).then((r) => r.json())).speed).toBe(4);
   } finally {
     child.kill("SIGINT");
   }
   await child.exited;
+});
+
+test("binrec play --ui without an id serves every recorded session for the panel", async () => {
+  const sessionId = await record("echo", "panel");
+  const { child, output, url } = await startUi();
+  try {
+    expect(output).toBe(`Serving the sessions in ${b.records} at ${url}\nOpen it in your browser. Press Ctrl+C to stop.\n`);
+    const index = await fetch(new URL("/sessions.json", url)).then((r) => r.json());
+    expect(index.selected).toBeNull();
+    expect(index.sessions.at(-1)).toMatchObject({ sessionId, args: ["panel"], exitCode: 0, parent: null, depth: 0 });
+
+    // Sessions recorded after the page started show up too.
+    const later = await record("echo", "later");
+    const again = await fetch(new URL("/sessions.json", url)).then((r) => r.json());
+    expect(again.sessions.at(-1).sessionId).toBe(later);
+    expect((await fetch(new URL(`/tree.json?id=${later}`, url))).status).toBe(200);
+  } finally {
+    child.kill("SIGINT");
+  }
+  expect(await child.exited).toBe(0);
 });
 
 test("binrec play --ui fails for an unknown session or a bad --port", async () => {
@@ -119,7 +148,7 @@ test("binrec play --ui fails for an unknown session or a bad --port", async () =
 
 test("binrec play --help shows --ui", async () => {
   const help = await $`bun ${binrec} play --help`.env(env).text();
-  expect(help).toContain("binrec play --ui [--port <n>] [--speed <n>] <id>");
+  expect(help).toContain("binrec play --ui [--port <n>] [--speed <n>] [<id>]");
   expect(help).toContain("--port <n>");
 });
 
@@ -128,6 +157,8 @@ test("uiSession takes the terminal size from the first resize and keeps later on
     sessionId: "s",
     command: "/usr/bin/top",
     args: [],
+    parent: null,
+    depth: 0,
     timestamp: "2026-10-18T00:00:00.000Z",
     exitCode: 0,
     total: 4,

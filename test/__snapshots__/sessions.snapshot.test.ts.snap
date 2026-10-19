@@ -9,6 +9,7 @@ exports[`date session 1`] = `
     "+%F",
   ],
   "command": "<path>/date",
+  "depth": 0,
   "exitCode": 0,
   "lines": [
     {
@@ -19,6 +20,8 @@ exports[`date session 1`] = `
         "+%F",
       ],
       "command": "<path>/date",
+      "depth": 0,
+      "parent": null,
       "performance": "<performance>",
       "pid": "<pid>",
       "sessionId": "<sessionId>",
@@ -43,6 +46,7 @@ exports[`date session 1`] = `
       "type": "end",
     },
   ],
+  "parent": null,
   "recordPath": "<records>/<sessionId>.ndjson",
   "sessionId": "<sessionId>",
   "timestamp": "<timestamp>",
@@ -54,11 +58,14 @@ exports[`cat session with stdin 1`] = `
 {
   "args": [],
   "command": "<path>/cat",
+  "depth": 0,
   "exitCode": 0,
   "lines": [
     {
       "args": [],
       "command": "<path>/cat",
+      "depth": 0,
+      "parent": null,
       "performance": "<performance>",
       "pid": "<pid>",
       "sessionId": "<sessionId>",
@@ -93,6 +100,7 @@ exports[`cat session with stdin 1`] = `
       "type": "end",
     },
   ],
+  "parent": null,
   "recordPath": "<records>/<sessionId>.ndjson",
   "sessionId": "<sessionId>",
   "timestamp": "<timestamp>",
@@ -106,6 +114,7 @@ exports[`printf session with bytes that are not UTF-8 1`] = `
     "\\377abc",
   ],
   "command": "<path>/printf",
+  "depth": 0,
   "exitCode": 0,
   "lines": [
     {
@@ -113,6 +122,8 @@ exports[`printf session with bytes that are not UTF-8 1`] = `
         "\\377abc",
       ],
       "command": "<path>/printf",
+      "depth": 0,
+      "parent": null,
       "performance": "<performance>",
       "pid": "<pid>",
       "sessionId": "<sessionId>",
@@ -135,6 +146,7 @@ exports[`printf session with bytes that are not UTF-8 1`] = `
       "type": "end",
     },
   ],
+  "parent": null,
   "recordPath": "<records>/<sessionId>.ndjson",
   "sessionId": "<sessionId>",
   "timestamp": "<timestamp>",
@@ -152,6 +164,7 @@ exports[`sessions of a command 1`] = `
       "+%F",
     ],
     "command": "<path>/date",
+    "depth": 0,
     "exitCode": 0,
     "lines": [
       {
@@ -162,6 +175,8 @@ exports[`sessions of a command 1`] = `
           "+%F",
         ],
         "command": "<path>/date",
+        "depth": 0,
+        "parent": null,
         "performance": "<performance>",
         "pid": "<pid>",
         "sessionId": "<sessionId>",
@@ -186,6 +201,7 @@ exports[`sessions of a command 1`] = `
         "type": "end",
       },
     ],
+    "parent": null,
     "recordPath": "<records>/<sessionId>.ndjson",
     "sessionId": "<sessionId>",
     "timestamp": "<timestamp>",
@@ -199,6 +215,7 @@ exports[`sessions of a command 1`] = `
       "+%F",
     ],
     "command": "<path>/date",
+    "depth": 0,
     "exitCode": 0,
     "lines": [
       {
@@ -209,6 +226,8 @@ exports[`sessions of a command 1`] = `
           "+%F",
         ],
         "command": "<path>/date",
+        "depth": 0,
+        "parent": null,
         "performance": "<performance>",
         "pid": "<pid>",
         "sessionId": "<sessionId>",
@@ -233,6 +252,7 @@ exports[`sessions of a command 1`] = `
         "type": "end",
       },
     ],
+    "parent": null,
     "recordPath": "<records>/<sessionId>.ndjson",
     "sessionId": "<sessionId>",
     "timestamp": "<timestamp>",

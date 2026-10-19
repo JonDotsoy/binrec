@@ -1,5 +1,5 @@
 import { version } from "../package.json";
-import { binrec, type Binrec } from "./binrec.ts";
+import { asTrees, binrec, type Binrec } from "./binrec.ts";
 
 const usage = (b: Binrec) => `Usage:
   binrec --help            Show this help (also: -h); binrec <command> --help
@@ -17,14 +17,17 @@ const usage = (b: Binrec) => `Usage:
   binrec stats             Show how many bytes the recorded sessions consumed and
                            rank the commands that consumed the most
   binrec list [<bin>]      List the recorded sessions (of <bin> only, if given) with
-                           their id, oldest first
-  binrec play [--timestamps] [--no-wait | --speed <n>] <id>
+                           their id, oldest first, each one followed by the sessions
+                           that ran inside it
+  binrec play [--timestamps] [--no-wait | --speed <n>] [--tree] <id>
                            Play the session <id> back, writing its output with the
                            recorded timing (<n> times faster); --no-wait writes it
-                           at once and --timestamps shows when each line was written
-  binrec play --ui [--port <n>] <id>
-                           Serve a page that plays the session <id> in a terminal
-                           in the browser, with a timeline to rewind and fast-forward
+                           at once, --timestamps shows when each line was written
+                           and --tree plays the sessions that ran inside it too
+  binrec play --ui [--port <n>] [<id>]
+                           Serve a page that plays the recorded sessions in a
+                           terminal in the browser: a panel to pick one, every
+                           process of its run on a timeline, rewind and fast-forward
   binrec rec [--records <dir>] [--config <file>] <path> [...]
                            Run <path> passing stdio through and record it in ${b.records}`;
 
@@ -73,11 +76,13 @@ binrec rec --help shows this help; any other --help goes to the program.
   list: (b) => `Usage: binrec list [<bin>]
 
 List the sessions recorded in ${b.records}, oldest first, with their id,
-start time, exit code, size and command line. With <bin> (a name like date
-or an absolute path), list only the sessions of that binary.
+start time, exit code, size and command line. A session run inside another
+one (a command run from a recorded shell, or by a recorded tool) is listed
+right after it, indented under it. With <bin> (a name like date or an
+absolute path), list only the sessions of that binary.
 Pass an id to binrec play to play a session back.`,
-  play: (b) => `Usage: binrec play [--timestamps] [--no-wait | --speed <n>] <id>
-       binrec play --ui [--port <n>] [--speed <n>] <id>
+  play: (b) => `Usage: binrec play [--timestamps] [--no-wait | --speed <n>] [--tree] <id>
+       binrec play --ui [--port <n>] [--speed <n>] [<id>]
 
 Play the session <id> from ${b.records} back: write its stdout and
 stderr again, each chunk as long after the start as it was recorded.
@@ -90,10 +95,22 @@ The start of an id is enough when it matches only one session.
                     waits, to see how the session ended (same as --speed 0)
   --speed <n>       Play <n> times faster (default: 1): 2 is twice as fast,
                     0.5 half as fast and 0 writes everything at once
+  --tree, -T        Play the sessions that ran inside <id> too (like the
+                    commands run from a recorded shell), interleaved by time:
+                    every line starts with the session that wrote it, as
+                    name[id], indented by how deep it is nested, and each
+                    session shows its command line and exit code. Output a
+                    session only passed on from one inside it is shown once,
+                    under the inner session
   --ui              Instead of writing the output here, serve a page on
                     127.0.0.1 and print its address: it plays the session in a
                     terminal in the browser, with a timeline that marks every
                     change on the screen, to pause, rewind and fast-forward.
+                    It shows every process of the run the session belongs to
+                    (from the outermost one) as a bar from its start to its
+                    end, nested under the one it ran inside; pick one to show
+                    it in the terminal. A panel lists every recorded session
+                    to open another one; without <id> the page opens on it.
                     Runs until Ctrl+C
   --port <n>        Port for --ui (default: a free one)`,
 };
@@ -204,12 +221,13 @@ const printList = async (b: Binrec, command?: string) => {
     return 0;
   }
 
-  const rows = found.map((session) => [
+  // Sessions run inside another one come right after it, indented under it.
+  const rows = asTrees(found).map(({ session, depth }) => [
     session.sessionId,
     session.timestamp.replace(/\.\d+Z$/, "Z"),
     session.exitCode === null ? "-" : String(session.exitCode),
     formatBytes(session.total),
-    [session.command, ...session.args].map(showArg).join(" "),
+    (depth ? `${"   ".repeat(depth - 1)}└─ ` : "") + [session.command, ...session.args].map(showArg).join(" "),
   ]);
   const header = ["ID", "STARTED", "EXIT", "SIZE", "COMMAND"];
   const widths = header.map((title, column) =>
@@ -232,12 +250,14 @@ const playSession = async (b: Binrec, args: string[]) => {
   let speed = 1;
   let timestamps = false;
   let ui = false;
+  let tree = false;
   let port: number | undefined;
-  const flags = ["--speed", "--timestamps", "-t", "--no-wait", "-n", "--ui", "--port"];
+  const flags = ["--speed", "--timestamps", "-t", "--no-wait", "-n", "--ui", "--port", "--tree", "-T"];
   while (args[0] !== undefined && flags.includes(args[0])) {
     const flag = args[0];
-    if (flag === "--timestamps" || flag === "-t" || flag === "--no-wait" || flag === "-n" || flag === "--ui") {
+    if (flag !== "--speed" && flag !== "--port") {
       if (flag === "--ui") ui = true;
+      else if (flag === "--tree" || flag === "-T") tree = true;
       else if (flag === "--no-wait" || flag === "-n") speed = 0;
       else timestamps = true;
       args = args.slice(1);
@@ -260,18 +280,18 @@ const playSession = async (b: Binrec, args: string[]) => {
     }
   }
   const id = args[0];
-  if (!id) {
+  if (!id && !ui) {
     console.error(usage(b));
     return 1;
   }
 
   try {
     if (!ui) {
-      await b.play(id, { speed, timestamps });
+      await b.play(id!, { speed, timestamps, tree });
       return 0;
     }
     const server = await b.playUi(id, { port, speed: speed || 1 });
-    console.log(`Playing ${id} at ${server.url}`);
+    console.log(id ? `Playing ${id} at ${server.url}` : `Serving the sessions in ${b.records} at ${server.url}`);
     console.log("Open it in your browser. Press Ctrl+C to stop.");
     await new Promise<void>((resolve) => {
       for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => resolve());

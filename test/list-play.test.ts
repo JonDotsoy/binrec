@@ -99,7 +99,7 @@ test("binrec list --help and binrec play --help show the command's help", async 
 
     const play = await $`bun ${binrec} play ${flag}`.env(env).nothrow().quiet();
     expect(play.exitCode).toBe(0);
-    expect(play.stdout.toString()).toStartWith("Usage: binrec play [--timestamps] [--no-wait | --speed <n>] <id>\n");
+    expect(play.stdout.toString()).toStartWith("Usage: binrec play [--timestamps] [--no-wait | --speed <n>] [--tree] <id>\n");
     expect(play.stdout.toString()).toContain("--speed <n>");
   }
 });
