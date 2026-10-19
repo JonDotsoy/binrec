@@ -259,6 +259,7 @@ Each session has `sessionId`, `command`, `args`, `parent` (`null` if it was not 
 
 ```sh
 bun install
+bunx playwright-core install --only-shell chromium  # once: the browser tests of play --ui
 bun test           # tests use Bun.$ and snapshots; the date cases need GNU date
 bun run typecheck  # tsc --noEmit over the sources and tests
 bun run build      # writes dist/binrec.js, dist/binrec.d.ts and dist/package.json

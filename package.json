@@ -41,6 +41,7 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@xterm/xterm": "^6.0.0",
+    "playwright-core": "1.56.1",
     "typescript": "^7"
   }
 }

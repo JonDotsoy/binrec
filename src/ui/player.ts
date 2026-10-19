@@ -474,6 +474,7 @@ export function player() {
     document.title = `binrec play · ${session.command.split("/").at(-1)}`;
     sessionSelect.value = String(index);
     processRows.forEach((row, rowIndex) => row.button.classList.toggle("selected", rowIndex === index));
+    markListed();
     reset();
     render(current);
     draw();
