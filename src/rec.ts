@@ -260,9 +260,10 @@ const recInPipes = async (
  * real binary while recording every chunk to `<records>/<sessionId>.ndjson`.
  *
  * Record lines, in order:
- * - `{ type: "command", sessionId, timestamp, performance, command, args, pid, parent? }`, where
- *   `pid` is the process id of the recorded program and `parent` is the id of the
- *   session it ran inside (`BINREC_SESSION`), when there is one
+ * - `{ type: "command", sessionId, timestamp, performance, command, args, pid, parent, depth }`,
+ *   where `pid` is the process id of the recorded program, `parent` is the id of the
+ *   session it ran inside (`BINREC_SESSION`) or `null`, and `depth` is how many
+ *   binrec sessions it ran inside (`BINREC_DEPTH`, `0` when run on its own)
  * - `{ type: "stdin" | "stdout" | "stderr", timestamp, performance, size, data }`, where
  *   `size` is the chunk's length in bytes, and `data` is `null` and `data_base64`
  *   holds the bytes if the chunk is not valid UTF-8
@@ -333,7 +334,7 @@ export const rec = async (
 
   const sessionId = crypto.randomUUID();
   const inherited = process.env[SESSION_ENV];
-  const parent = inherited && /^[\w-]+$/.test(inherited) ? inherited : undefined;
+  const parent = inherited && /^[\w-]+$/.test(inherited) ? inherited : null;
   env[SESSION_ENV] = sessionId;
   const recordPath = join(records, `${sessionId}.ndjson`);
 
@@ -349,7 +350,7 @@ export const rec = async (
   };
 
   // The command line goes first, as soon as the program has a pid.
-  const started: Started = (pid) => write({ type: "command", sessionId, ...stamp(), command, args, pid, ...(parent ? { parent } : {}) });
+  const started: Started = (pid) => write({ type: "command", sessionId, ...stamp(), command, args, pid, parent, depth });
 
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
   const exitCode = interactive

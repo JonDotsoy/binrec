@@ -6,6 +6,7 @@ export type {
   PlayOptions,
   PlayUiOptions,
   PlayUiServer,
+  PlayUiSource,
   CommandStats,
   CreateOptions,
   RecOptions,

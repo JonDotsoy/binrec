@@ -11,8 +11,13 @@ export type RecordLine =
       args: string[];
       /** Process id of the recorded program. Missing in older records. */
       pid?: number;
-      /** Id of the session this one ran inside, like a command run from a recorded shell. */
-      parent?: string;
+      /**
+       * Id of the session this one ran inside, like a command run from a recorded
+       * shell, or `null`. Missing in older records.
+       */
+      parent?: string | null;
+      /** How many binrec sessions this one ran inside, `0` when run on its own. Missing in older records. */
+      depth?: number;
     }
   | {
       type: "stdin" | "stdout" | "stderr";
@@ -56,6 +61,8 @@ export type Session = {
   args: string[];
   /** Id of the session this one ran inside, or `null` when it was not run from a recorded session. */
   parent: string | null;
+  /** How many binrec sessions this one ran inside: `0` when run on its own (and in older records). */
+  depth: number;
   /** When the session started (ISO 8601). */
   timestamp: string;
   /** Exit code from the `end` line, or `null` if the session has not ended. */
@@ -101,6 +108,7 @@ export const readSession = async (recordPath: string): Promise<Session | null> =
     command: first.command,
     args: first.args,
     parent: first.parent ?? null,
+    depth: typeof first.depth === "number" ? first.depth : 0,
     timestamp: first.timestamp,
     exitCode: end?.type === "end" ? end.exitCode : null,
     total,
@@ -207,9 +215,24 @@ export const asTrees = (found: Session[]): TreeSession[] => {
  * The session whose id is `id` (or starts with it) followed by every session
  * that ran inside it, at any depth, oldest first under each parent. Returns an
  * empty list when there is no such session and throws when the id is ambiguous.
+ * With `fromRoot`, the tree starts at the outermost recorded session `id` ran
+ * inside instead (the one at depth 0 when it was recorded).
  */
-export const sessionTree = async (records: string, id: string): Promise<TreeSession[]> => {
-  const root = await findSession(records, id);
+export const sessionTree = async (
+  records: string,
+  id: string,
+  { fromRoot = false }: { fromRoot?: boolean } = {},
+): Promise<TreeSession[]> => {
+  let root = await findSession(records, id);
   if (!root) return [];
-  return walk(await sessions(records), [root]);
+  const all = await sessions(records);
+  if (fromRoot) {
+    const byId = new Map(all.map((session) => [session.sessionId, session]));
+    const seen = new Set([root.sessionId]);
+    for (let up = byId.get(root.parent ?? ""); up && !seen.has(up.sessionId); up = byId.get(up.parent ?? "")) {
+      seen.add(up.sessionId);
+      root = up;
+    }
+  }
+  return walk(all, [root]);
 };

@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { binrec as lib, playTree, type Binrec, type Session } from "../index.ts";
-import { uiSession } from "../src/ui/server.ts";
+import { uiTree } from "../src/ui/server.ts";
 
 const binrec = new URL("../bin/binrec.ts", import.meta.url).pathname;
 
@@ -42,9 +42,10 @@ const recordNested = async () => {
 
 test("a session run inside a recorded one saves its id as parent", async () => {
   const { outer, middle, leaf } = await recordNested();
-  expect(outer.parent).toBeNull();
-  expect(outer.lines[0]).not.toHaveProperty("parent");
-  expect(middle.lines[0]).toMatchObject({ type: "command", parent: outer.sessionId });
+  expect(outer).toMatchObject({ parent: null, depth: 0 });
+  expect(outer.lines[0]).toMatchObject({ type: "command", parent: null, depth: 0 });
+  expect(middle.lines[0]).toMatchObject({ type: "command", parent: outer.sessionId, depth: 1 });
+  expect(leaf).toMatchObject({ parent: middle.sessionId, depth: 2 });
   expect(leaf.args).toEqual(["hoja\\n"]);
 
   const tree = await b.sessionTree(outer.sessionId.slice(0, 8));
@@ -54,6 +55,9 @@ test("a session run inside a recorded one saves its id as parent", async () => {
     [leaf.sessionId, 2],
   ]);
   expect((await b.sessionTree(middle.sessionId)).map(({ depth }) => depth)).toEqual([0, 1]);
+  expect((await b.sessionTree(leaf.sessionId, { fromRoot: true })).map(({ session }) => session.sessionId)).toEqual(
+    tree.map(({ session }) => session.sessionId),
+  );
   expect(await b.sessionTree("nope")).toEqual([]);
 });
 
@@ -119,6 +123,7 @@ test("playTree keeps a parent's own output that only looks like its child's", as
     command: `/bin/${sessionId}`,
     args: [],
     parent,
+    depth: parent ? 1 : 0,
     timestamp: at(0),
     exitCode: 0,
     total: 0,
@@ -144,22 +149,35 @@ test("playTree keeps a parent's own output that only looks like its child's", as
   ]);
 });
 
-test("binrec play --ui --tree lists the nested sessions in session.json", async () => {
+test("binrec play --ui opens on a nested session with every process of its run", async () => {
   const { outer, middle, leaf } = await recordNested();
-  const tree = await b.sessionTree(outer.sessionId);
-  const ui = uiSession(outer, 1, tree.slice(1));
-  expect(ui.nested.map(({ sessionId, depth, exitCode }) => [sessionId, depth, exitCode])).toEqual([
-    [middle.sessionId, 1, 0],
-    [leaf.sessionId, 2, 0],
+  const tree = uiTree(await b.sessionTree(outer.sessionId), 1, middle.sessionId);
+  expect(tree.selected).toBe(1);
+  expect(tree.sessions.map(({ sessionId, parent, depth }) => [sessionId, parent, depth])).toEqual([
+    [outer.sessionId, null, 0],
+    [middle.sessionId, outer.sessionId, 1],
+    [leaf.sessionId, middle.sessionId, 2],
   ]);
-  expect(ui.nested[1]!.start).toBeGreaterThanOrEqual(ui.nested[0]!.start);
-  expect(ui.nested[1]!.end).toBeLessThanOrEqual(ui.nested[0]!.end);
-  expect(uiSession(outer).nested).toEqual([]);
+  const [root, inner, last] = tree.sessions;
+  expect(root!.offset).toBe(0);
+  expect(inner!.offset).toBeGreaterThan(0);
+  expect(last!.offset).toBeGreaterThanOrEqual(inner!.offset);
+  expect(last!.offset + last!.duration).toBeLessThanOrEqual(inner!.offset + inner!.duration + 5);
 
-  const server = await b.playUi(outer.sessionId, { tree: true });
+  // Given the innermost session, the page loads the whole run and starts on it.
+  const server = await b.playUi(leaf.sessionId.slice(0, 8));
   try {
-    const session = await fetch(new URL("/session.json", server.url)).then((r) => r.json());
-    expect(session.nested).toHaveLength(2);
+    const index = await fetch(new URL("/sessions.json", server.url)).then((r) => r.json());
+    expect(index.selected).toBe(leaf.sessionId);
+    const listed = index.sessions.find((session: { sessionId: string }) => session.sessionId === leaf.sessionId);
+    expect(listed).toMatchObject({ parent: middle.sessionId, depth: 2 });
+    const served = await fetch(new URL(`/tree.json?id=${leaf.sessionId}`, server.url)).then((r) => r.json());
+    expect(served.selected).toBe(2);
+    expect(served.sessions.map((session: { sessionId: string }) => session.sessionId)).toEqual([
+      outer.sessionId,
+      middle.sessionId,
+      leaf.sessionId,
+    ]);
   } finally {
     await server.stop();
   }

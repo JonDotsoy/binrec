@@ -12,7 +12,7 @@ export { rec } from "./rec.ts";
 export { play, playTree } from "./play.ts";
 export type { PlayOptions } from "./play.ts";
 export { playUi } from "./ui/server.ts";
-export type { PlayUiOptions, PlayUiServer } from "./ui/server.ts";
+export type { PlayUiOptions, PlayUiServer, PlayUiSource } from "./ui/server.ts";
 export type { Config, RecOptions, RecResult } from "./rec.ts";
 export { asTrees, sessionTree } from "./sessions.ts";
 export type { RecordLine, Session, TreeSession } from "./sessions.ts";
@@ -72,7 +72,7 @@ export type Binrec = {
    * The session `id` followed by every session that ran inside it, at any depth,
    * like the commands run from a recorded shell. Empty when there is no such session.
    */
-  sessionTree(id: string): Promise<TreeSession[]>;
+  sessionTree(id: string, options?: { fromRoot?: boolean }): Promise<TreeSession[]>;
   /**
    * Writes the `stdout` and `stderr` of the session `id` again with its recorded
    * timing. With `tree`, plays the sessions that ran inside it too, every line
@@ -80,11 +80,14 @@ export type Binrec = {
    */
   play(id: string, options?: PlayOptions & { tree?: boolean }): Promise<void>;
   /**
-   * Serves a page on 127.0.0.1 that plays the session `id` in a terminal in the
-   * browser, with a timeline to pause, rewind and fast-forward it. With `tree`,
-   * the page also lists the sessions that ran inside it and marks them on the timeline.
+   * Serves a page on 127.0.0.1 that plays the recorded sessions in a terminal in
+   * the browser, with a timeline to pause, rewind and fast-forward them, and a
+   * panel that lists every recorded session to pick one. The page plays the
+   * whole run a session belongs to, from its outermost session: it shows when
+   * every session ran and which one ran inside which. With `id`, it opens on
+   * that session (throws if there is none); without it, on the panel.
    */
-  playUi(id: string, options?: Omit<PlayUiOptions, "nested"> & { tree?: boolean }): Promise<PlayUiServer>;
+  playUi(id?: string, options?: Omit<PlayUiOptions, "selected">): Promise<PlayUiServer>;
   /** The most recent recorded session of `command`, or `null` if there is none. */
   lastSession(command: string): Promise<Session | null>;
   /** Bytes consumed by every recorded session, overall and per command (most first). */
@@ -208,18 +211,21 @@ const create = (options: CreateOptions = {}): Binrec => {
     isRecording,
     sessions: (command) => sessions(records, command),
     session: (id) => findSession(records, id),
-    sessionTree: (id) => sessionTree(records, id),
+    sessionTree: (id, options) => sessionTree(records, id, options),
     play: async (id, { tree, ...options } = {}) => {
       const sessions = tree ? await sessionTree(records, id) : [];
       const session = tree ? sessions[0]?.session : await findSession(records, id);
       if (!session) throw new Error(`binrec: no recorded session ${id} in ${records}`);
       await (tree ? playTree(sessions, options) : play(session, options));
     },
-    playUi: async (id, { tree, ...options } = {}) => {
-      const sessions = tree ? await sessionTree(records, id) : [];
-      const session = tree ? sessions[0]?.session : await findSession(records, id);
-      if (!session) throw new Error(`binrec: no recorded session ${id} in ${records}`);
-      return playUi(session, { ...options, nested: sessions.slice(1) });
+    playUi: async (id, options = {}) => {
+      const session = id === undefined ? null : await findSession(records, id);
+      if (id !== undefined && !session) throw new Error(`binrec: no recorded session ${id} in ${records}`);
+      const source = {
+        sessions: () => sessions(records),
+        tree: (id: string) => sessionTree(records, id, { fromRoot: true }),
+      };
+      return playUi(source, { ...options, selected: session?.sessionId });
     },
     lastSession: (command) => lastSession(records, command),
     stats: () => stats(records),

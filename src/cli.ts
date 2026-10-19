@@ -24,9 +24,10 @@ const usage = (b: Binrec) => `Usage:
                            recorded timing (<n> times faster); --no-wait writes it
                            at once, --timestamps shows when each line was written
                            and --tree plays the sessions that ran inside it too
-  binrec play --ui [--port <n>] [--tree] <id>
-                           Serve a page that plays the session <id> in a terminal
-                           in the browser, with a timeline to rewind and fast-forward
+  binrec play --ui [--port <n>] [<id>]
+                           Serve a page that plays the recorded sessions in a
+                           terminal in the browser: a panel to pick one, every
+                           process of its run on a timeline, rewind and fast-forward
   binrec rec [--records <dir>] [--config <file>] <path> [...]
                            Run <path> passing stdio through and record it in ${b.records}`;
 
@@ -81,7 +82,7 @@ right after it, indented under it. With <bin> (a name like date or an
 absolute path), list only the sessions of that binary.
 Pass an id to binrec play to play a session back.`,
   play: (b) => `Usage: binrec play [--timestamps] [--no-wait | --speed <n>] [--tree] <id>
-       binrec play --ui [--port <n>] [--speed <n>] [--tree] <id>
+       binrec play --ui [--port <n>] [--speed <n>] [<id>]
 
 Play the session <id> from ${b.records} back: write its stdout and
 stderr again, each chunk as long after the start as it was recorded.
@@ -100,12 +101,16 @@ The start of an id is enough when it matches only one session.
                     name[id], indented by how deep it is nested, and each
                     session shows its command line and exit code. Output a
                     session only passed on from one inside it is shown once,
-                    under the inner session. With --ui, the page lists the
-                    nested sessions and marks them on the timeline
+                    under the inner session
   --ui              Instead of writing the output here, serve a page on
                     127.0.0.1 and print its address: it plays the session in a
                     terminal in the browser, with a timeline that marks every
                     change on the screen, to pause, rewind and fast-forward.
+                    It shows every process of the run the session belongs to
+                    (from the outermost one) as a bar from its start to its
+                    end, nested under the one it ran inside; pick one to show
+                    it in the terminal. A panel lists every recorded session
+                    to open another one; without <id> the page opens on it.
                     Runs until Ctrl+C
   --port <n>        Port for --ui (default: a free one)`,
 };
@@ -275,18 +280,18 @@ const playSession = async (b: Binrec, args: string[]) => {
     }
   }
   const id = args[0];
-  if (!id) {
+  if (!id && !ui) {
     console.error(usage(b));
     return 1;
   }
 
   try {
     if (!ui) {
-      await b.play(id, { speed, timestamps, tree });
+      await b.play(id!, { speed, timestamps, tree });
       return 0;
     }
-    const server = await b.playUi(id, { port, speed: speed || 1, tree });
-    console.log(`Playing ${id} at ${server.url}`);
+    const server = await b.playUi(id, { port, speed: speed || 1 });
+    console.log(id ? `Playing ${id} at ${server.url}` : `Serving the sessions in ${b.records} at ${server.url}`);
     console.log("Open it in your browser. Press Ctrl+C to stop.");
     await new Promise<void>((resolve) => {
       for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => resolve());
