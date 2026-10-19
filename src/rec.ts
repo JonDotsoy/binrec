@@ -1,5 +1,7 @@
-import { mkdir, open } from "node:fs/promises";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { mkdir, mkdtemp, open, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, delimiter, isAbsolute, join, resolve } from "node:path";
+import { isShim, writeShim } from "./shim.ts";
 import { writeSessionStats } from "./stats.ts";
 
 export type RecOptions = {
@@ -7,6 +9,13 @@ export type RecOptions = {
   records: string | false;
   /** binrec's `config.json`. Recording is skipped while it has `"recording": false`. */
   config?: string;
+  /**
+   * Commands the program finds as shims in a folder of their own, put first in
+   * its `PATH` while the session runs, so every run of them inside the session
+   * is recorded as a nested session. A name is looked up in `PATH`, skipping
+   * binrec shims; an absolute path is used as is.
+   */
+  shims?: string[];
 };
 
 export type Config = {
@@ -256,6 +265,23 @@ const recInPipes = async (
 };
 
 /**
+ * Looks `command` up in `PATH` like the shell does, skipping binrec shims, so a
+ * `--shim` never points at a shim from `binrec install` and records twice.
+ */
+const whichReal = async (command: string) => {
+  if (isAbsolute(command)) return command;
+  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+    if (!dir) continue;
+    const found = Bun.which(command, { PATH: dir });
+    if (!found) continue;
+    // A shim is one short line; reading its start is enough and skips big binaries.
+    const content = await Bun.file(found).slice(0, 8192).text().catch(() => "");
+    if (!isShim(content)) return found;
+  }
+  return null;
+};
+
+/**
  * Runs `target` with `args`, passing stdin, stdout and stderr through to the
  * real binary while recording every chunk to `<records>/<sessionId>.ndjson`.
  *
@@ -281,6 +307,10 @@ const recInPipes = async (
  * `maxDepth` from `config.json` (10 by default), the program is not run: binrec
  * prints an error and returns exit code 1. `BINREC_DEPTH` has no limit. While
  * the session is recorded, the program also gets `BINREC_SESSION` set to its id.
+ *
+ * With `shims`, binrec writes a shim for each of those commands in a temporary
+ * folder, puts it first in the program's `PATH` and removes it after the
+ * session; the `command` line then also carries `shims`, the shimmed names.
  *
  * When both stdin and stdout are a terminal, the program runs on a pseudo
  * terminal so interactive programs keep working; otherwise it runs with pipes.
@@ -311,11 +341,21 @@ export const rec = async (
     );
     return { exitCode: 1, sessionId: null, recordPath: null };
   }
-  const env = {
+  const env: Record<string, string | undefined> = {
     ...process.env,
     [DEPTH_ENV]: String(depth + 1),
     [commandEnv]: String(commandDepth + 1),
   };
+
+  const shims: { name: string; target: string }[] = [];
+  for (const shim of options.shims ?? []) {
+    const target = await whichReal(shim);
+    if (!target) {
+      console.error(`binrec: ${command} not run, --shim ${shim}: command not found`);
+      return { exitCode: 1, sessionId: null, recordPath: null };
+    }
+    shims.push({ name: basename(shim), target });
+  }
 
   const records = options.records === false ? null : resolve(options.records);
   const recordingOff =
@@ -350,12 +390,29 @@ export const rec = async (
   };
 
   // The command line goes first, as soon as the program has a pid.
-  const started: Started = (pid) => write({ type: "command", sessionId, ...stamp(), command, args, pid, parent, depth });
+  const shimmed = shims.length ? { shims: shims.map(({ name }) => name) } : {};
+  const started: Started = (pid) =>
+    write({ type: "command", sessionId, ...stamp(), command, args, pid, parent, depth, ...shimmed });
 
+  // Only the program's own runs of these commands are recorded, so their shims
+  // live in a folder of its own (mode 0700), first in its PATH and gone after it.
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
-  const exitCode = interactive
-    ? await recInTerminal(command, args, env, write, started)
-    : await recInPipes(command, args, env, write, started);
+  let exitCode: number;
+  let shimDir: string | null = null;
+  try {
+    if (shims.length) {
+      shimDir = await mkdtemp(join(tmpdir(), "binrec-shims-"));
+      for (const { name, target } of shims) {
+        await writeShim(join(shimDir, name), { target, records, config: options.config });
+      }
+      env.PATH = [shimDir, process.env.PATH].filter(Boolean).join(delimiter);
+    }
+    exitCode = interactive
+      ? await recInTerminal(command, args, env, write, started)
+      : await recInPipes(command, args, env, write, started);
+  } finally {
+    if (shimDir) await rm(shimDir, { recursive: true, force: true });
+  }
 
   write({ type: "end", ...stamp(), exitCode, total });
   await record.end();
