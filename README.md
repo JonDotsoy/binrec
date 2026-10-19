@@ -68,7 +68,7 @@ See [Recording one run](#recording-one-run-binrec-rec) for what `binrec rec` doe
 | `binrec list [<bin>]` | Lists the recorded sessions, oldest first, with their id, start time, exit code, size and command line. A session run inside another one (a command run from a recorded shell, or by a recorded tool) comes right after it, indented with `└─`. With `<bin>`, only the sessions of that binary. |
 | `binrec play [--timestamps] [--no-wait \| --speed <n>] [--tree] <id>` | Plays session `<id>` back: writes its `stdout` and `stderr` again, each chunk as long after the start as it was recorded. The start of an id is enough when it matches only one session. `--timestamps` (`-t`) shows every line with its recorded timestamp, the time since the start and its stream. `--no-wait` (`-n`) writes the whole output at once, to see how the session ended. `--speed 2` plays twice as fast, `--speed 0.5` half as fast, and `--speed 0` is the same as `--no-wait`. `--tree` (`-T`) plays the sessions that ran inside it too; see [Nested sessions](#nested-sessions). |
 | `binrec play --ui [--port <n>] [--speed <n>] [<id>]` | Plays session `<id>` in the browser instead, or opens a panel with every recorded session when `<id>` is left out: serves a page on `127.0.0.1` (on a free port, or `--port`), prints its address and runs until Ctrl+C. See [Play in the browser](#play-in-the-browser). |
-| `binrec rec [--records <dir>] [--config <file>] [--shim <cmd>,…] <path> [args…]` | Runs `<path>`, passes stdio through, records the session and exits with its exit code. `--shim` also records every run of those commands inside it. See [Recording one run](#recording-one-run-binrec-rec). |
+| `binrec rec [--records <dir>] [--config <file>] [--shim <cmd>,…] <path> [args…]` | Runs `<path>`, passes stdio through, records the session and exits with its exit code. `--shim` also records every run of those commands inside it, `--shim-all` every command in `PATH`. See [Recording one run](#recording-one-run-binrec-rec). |
 | `binrec --version` (`-v`) | Prints the binrec version. |
 | `binrec --help` (`-h`) | Prints every command. `binrec <command> --help` (or `-h`) prints the help of one command without running it. For `rec`, only a lone `binrec rec --help` does; with more arguments, `--help` goes to the recorded program. |
 
@@ -109,13 +109,14 @@ Settings are saved in `~/.binrec/config.json`:
 `binrec rec` is what every shim runs, and you can run it yourself to record a single run without installing a shim:
 
 ```sh
-binrec rec [--records <dir>] [--config <file>] [--shim <cmd>[,<cmd>…]]… <command> [args…]
+binrec rec [--records <dir>] [--config <file>] [--shim <cmd>[,<cmd>…]]… [--shim-all [--no-shim <cmd>[,<cmd>…]]…] <command> [args…]
 ```
 
 - `<command>` is an absolute path, or a name looked up in `PATH` like the shell does (a relative path such as `./build.sh` works too). Everything after it goes to the program untouched, `--help` included: only a lone `binrec rec --help` shows binrec's help.
 - `--records <dir>` is the folder for the records (default `~/.binrec/records`). It is created with mode `0700` when missing.
 - `--config <file>` is the settings file to read (default `~/.binrec/config.json`).
 - `--shim <cmd>` also records every run of `<cmd>` inside the session, each as a session of its own. Repeat it, or separate commands with commas. See [Watching only some commands](#watching-only-some-commands---shim).
+- `--shim-all` records every command the program finds in `PATH`, and `--no-shim <cmd>` leaves some out. See [Watching every command](#watching-every-command---shim-all).
 - `binrec rec` exits with the program's exit code.
 
 ```sh
@@ -144,6 +145,23 @@ binrec writes a shim for each command in a new temporary folder (`$TMPDIR/binrec
 - The shimmed commands record in the same `--records` folder and read the same `--config`.
 - When recording is off, no shim folder is created and nothing is recorded.
 
+#### Watching every command: `--shim-all`
+
+`--shim-all` records every command the program looks up in `PATH`, each as a session of its own, like `--shim` with every name in `PATH`:
+
+```sh
+binrec rec --shim-all ./install.sh
+binrec rec --shim-all --no-shim grep,sed make     # everything except grep and sed
+```
+
+binrec writes one dispatcher script in the temporary folder and a symlink to it for every executable name it finds in `PATH`. The dispatcher looks the command up in the `PATH` the program has **when it runs the command**, skipping the temporary folder and shims from `binrec install`, so a program that changes its `PATH` (a Python venv, `nvm use`) still runs the same command it would run without binrec.
+
+- Each recorded command costs about 50 ms more, since it goes through `binrec rec`, and leaves its own record. A script that runs thousands of commands (`configure`, a big `make`) gets much slower and fills `binrec list`. When you know which commands matter, `--shim` is cheaper.
+- Builtins (`echo`, `cd`, `[`, `read`), shell functions and commands run by full path are not recorded. Nor are commands installed while the session runs.
+- These commands are left out by default, unless you name them with `--shim`: `bun` and `binrec`, commands that change the terminal (`stty`, `tty`, `tput`, `reset`; they would change binrec's pseudo terminal instead of yours), commands that ask for passwords or keys (`sudo`, `su`, `doas`, `ssh`, `gpg`, `pass`), and commands that need to be the direct child of the caller (`nohup`, `setsid`, `timeout`). `--no-shim <cmd>[,<cmd>…]` leaves out more.
+- A command that calls itself more than `maxDepth` levels deep (a recursive `make`) stops at the [nesting limit](#cli); raise `maxDepth` in `config.json` for it.
+- The `command` line of the session has `shimAll: true`.
+
 #### What `binrec rec` does before recording
 
 In order:
@@ -154,7 +172,7 @@ In order:
 4. **Resolves the `--shim` commands**, if any (see [Watching only some commands](#watching-only-some-commands---shim)). A command not found stops here with exit code 1.
 5. **Checks whether recording is on.** When `config.json` has `"recording": false` (or the records folder has the `.disabled` file older versions wrote), it runs the program with the same stdin, stdout and stderr, writes nothing, and exits with its exit code. The program still gets `BINREC_DEPTH` and `BINREC_DEPTH_<COMMAND>`, but not `BINREC_SESSION`.
 6. **Starts the session.** It picks a random session id (a UUID), reads `BINREC_SESSION` from its own environment as the parent session (ignored unless it only has letters, digits, `-` and `_`), creates the records folder if needed and creates `<sessionId>.ndjson` with mode `0600`. It never overwrites an existing file.
-7. **Writes the `--shim` shims**, if any, in a temporary folder and puts it first in the program's `PATH`.
+7. **Writes the `--shim` shims**, if any, and with `--shim-all` the dispatcher and its links, in a temporary folder and puts it first in the program's `PATH`.
 8. **Chooses how to connect the program.** When both stdin and stdout are a terminal, the program runs on a pseudo terminal (with your `TERM`, or `xterm-256color`, and your window size), so interactive programs such as `vim` or `less` keep working; stdout and stderr then arrive merged, recorded as `stdout`. Otherwise it runs with three pipes and keeps stdout and stderr apart.
 9. **Runs the program** and, as soon as it has a pid, writes the `command` line with `pid`, `parent` and `depth` (and `shims` with `--shim`). From there it passes every chunk through and records it, records window size changes as `resize` lines, and passes `SIGTERM` and `SIGHUP` on to the program (and `SIGINT` and `SIGQUIT` too on a pseudo terminal; with pipes the terminal already sends them to the program), recording each one as a `signal` line.
 10. **Ends the session** when the program exits: removes the `--shim` folder, writes the `end` line with the exit code and the total bytes, writes `<sessionId>.stats.json`, and exits with the program's exit code.
@@ -170,7 +188,7 @@ The program gets binrec's whole environment, with these variables set:
 | `BINREC_SESSION` | The id of this session. A recorded program started from inside saves it as its `parent`. | Only while recording. |
 | `BINREC_DEPTH` | How many binrec sessions the program runs inside: binrec's own value plus one (`1` when run on its own). It has no limit. | Always. |
 | `BINREC_DEPTH_<COMMAND>` | How many sessions of this command the program runs inside, plus one. `<COMMAND>` is the command's file name in upper case, with every character other than a letter or digit turned into `_`: `BINREC_DEPTH_DATE` for `/usr/bin/date`, `BINREC_DEPTH_DOCKER_COMPOSE` for `docker-compose`. | Always. |
-| `PATH` | The `--shim` folder first, then binrec's own `PATH`. | Only with `--shim`, while recording. |
+| `PATH` | The `--shim` folder first, then binrec's own `PATH`. | Only with `--shim` or `--shim-all`, while recording. |
 
 Counters of other commands that the program inherits (for example `BINREC_DEPTH_BASH` when it runs inside a recorded `bash`) are passed on unchanged. For example, inside a recorded `bash`:
 
@@ -278,7 +296,7 @@ Each session is one ndjson file:
 {"type":"end","timestamp":"2026-10-18T04:05:14.950Z","performance":23.68,"exitCode":0,"total":11}
 ```
 
-- The first line (`command`) has the session id, the absolute path of the binary, its arguments and `pid`, the process id of the recorded program. It also has `parent`, the id of the session it ran inside (`null` when it ran on its own), and `depth`, how many binrec sessions it ran inside (`0` on its own). A session started with `binrec rec --shim` also has `shims`, the names of the shimmed commands.
+- The first line (`command`) has the session id, the absolute path of the binary, its arguments and `pid`, the process id of the recorded program. It also has `parent`, the id of the session it ran inside (`null` when it ran on its own), and `depth`, how many binrec sessions it ran inside (`0` on its own). A session started with `binrec rec --shim` also has `shims`, the names of the shimmed commands, and one started with `--shim-all` has `shimAll: true`.
 - Each `stdin`, `stdout` and `stderr` line holds one chunk as text in `data`, and its length in bytes in `size` (the bytes the program read or wrote, not the length of the text or base64).
 - If a chunk is not valid UTF-8 on its own, `data` is `null` and the raw bytes are in `data_base64`, so nothing is lost.
 - On a terminal, `resize` lines hold the window size (`cols`, `rows`): one at the start and one each time the window changes.
@@ -324,7 +342,7 @@ session?.lines;    // every ndjson line of the session
 | `b.on()` / `b.off()` | Aliases of `b.enableRecords()` / `b.disableRecords()`. |
 | `b.on(command)` / `b.off(command)` | Aliases of `b.install(command)` / `b.uninstall(command)`. |
 | `b.isRecording()` | `true` unless recording was turned off. |
-| `binrec.rec(path, args, { records, config?, shims? })` | Runs and records one command, like `binrec rec`. Pass `records: false` to run without recording. `shims` is the list of `--shim` commands. |
+| `binrec.rec(path, args, { records, config?, shims?, shimAll?, noShims? })` | Runs and records one command, like `binrec rec`. Pass `records: false` to run without recording. `shims` is the list of `--shim` commands, `shimAll` is `--shim-all` and `noShims` the `--no-shim` commands. |
 | `play(session, { speed?, timestamps?, stdout?, stderr? })` | Plays a `Session` you already read back to `stdout` and `stderr` (default `process.stdout` and `process.stderr`). |
 | `playTree(tree, { speed?, timestamps?, stdout?, stderr? })` | Plays a tree from `b.sessionTree(id)` like `binrec play --tree`. |
 | `playUi(source, { port?, speed?, selected? })` | Serves the `binrec play --ui` page for a `Session` or a tree you already read, or for a `{ sessions(), tree(id) }` source read on every request, and returns `{ url, stop() }`. |
