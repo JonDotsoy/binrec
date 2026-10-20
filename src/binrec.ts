@@ -6,12 +6,15 @@ import { play, playTree, type PlayOptions } from "./play.ts";
 import { playUi, type PlayUiOptions, type PlayUiServer } from "./ui/server.ts";
 import { findSession, lastSession, sessionTree, sessions, type Session, type TreeSession } from "./sessions.ts";
 import { stats, type Stats } from "./stats.ts";
+import { exportVideo, type ExportOptions, type ExportResult } from "./video/export.ts";
 import { shellLines } from "./shell.ts";
 
 export { rec } from "./rec.ts";
 export { play, playTree } from "./play.ts";
 export type { PlayOptions } from "./play.ts";
 export { playUi } from "./ui/server.ts";
+export { exportVideo } from "./video/export.ts";
+export type { ExportOptions, ExportResult, VideoFormat } from "./video/export.ts";
 export type { PlayUiOptions, PlayUiServer, PlayUiSource } from "./ui/server.ts";
 export type { Config, RecOptions, RecResult } from "./rec.ts";
 export { asTrees, sessionTree } from "./sessions.ts";
@@ -88,6 +91,12 @@ export type Binrec = {
    * that session (throws if there is none); without it, on the panel.
    */
   playUi(id?: string, options?: Omit<PlayUiOptions, "selected">): Promise<PlayUiServer>;
+  /**
+   * Turns the session `id` into a video at `output` (MP4, WebM or GIF, by its
+   * extension or `format`), drawn like the terminal of `playUi`. Needs ffmpeg.
+   * Throws if there is no such session.
+   */
+  exportVideo(id: string, output: string, options?: ExportOptions): Promise<ExportResult>;
   /** The most recent recorded session of `command`, or `null` if there is none. */
   lastSession(command: string): Promise<Session | null>;
   /** Bytes consumed by every recorded session, overall and per command (most first). */
@@ -226,6 +235,11 @@ const create = (options: CreateOptions = {}): Binrec => {
         tree: (id: string) => sessionTree(records, id, { fromRoot: true }),
       };
       return playUi(source, { ...options, selected: session?.sessionId });
+    },
+    exportVideo: async (id, output, options) => {
+      const session = await findSession(records, id);
+      if (!session) throw new Error(`binrec: no recorded session ${id} in ${records}`);
+      return exportVideo(session, output, options);
     },
     lastSession: (command) => lastSession(records, command),
     stats: () => stats(records),

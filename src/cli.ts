@@ -1,5 +1,6 @@
 import { version } from "../package.json";
 import { asTrees, binrec, type Binrec } from "./binrec.ts";
+import { formatOf, videoFormats, type VideoFormat } from "./video/export.ts";
 
 const usage = (b: Binrec) => `Usage:
   binrec --help            Show this help (also: -h); binrec <command> --help
@@ -28,6 +29,9 @@ const usage = (b: Binrec) => `Usage:
                            Serve a page that plays the recorded sessions in a
                            terminal in the browser: a panel to pick one, every
                            process of its run on a timeline, rewind and fast-forward
+  binrec export [--output <file>] [--format mp4|webm|gif] [--speed <n>] [--fps <n>]
+                [--max-pause <s>] [--force] <id>
+                           Turn the session <id> into a video (needs ffmpeg)
   binrec rec [--records <dir>] [--config <file>] <path> [...]
                            Run <path> passing stdio through and record it in ${b.records}`;
 
@@ -113,6 +117,24 @@ The start of an id is enough when it matches only one session.
                     to open another one; without <id> the page opens on it.
                     Runs until Ctrl+C
   --port <n>        Port for --ui (default: a free one)`,
+  export: (b) => `Usage: binrec export [--output <file>] [--format mp4|webm|gif] [--speed <n>]
+                     [--fps <n>] [--max-pause <s>] [--force] <id>
+
+Turn the session <id> from ${b.records} into a video: its output is played
+into a terminal of the recorded size and every frame is drawn like the
+terminal of binrec play --ui. ffmpeg must be installed (it encodes the video).
+The start of an id is enough when it matches only one session.
+
+  --output <file>, -o   Where to write the video (default: binrec-<id>.<format>
+                        in the current folder)
+  --format <format>     mp4 (H.264), webm (VP9) or gif (default: the extension
+                        of --output, or mp4)
+  --speed <n>           Play <n> times faster (default: 1)
+  --fps <n>             Frames per second (default: 30, 15 for a GIF)
+  --max-pause <s>       Cut every wait longer than <s> seconds to <s>, like a
+                        shell waiting for you to type (default: 5); a negative
+                        number keeps every wait as recorded
+  --force, -f           Replace the file if it already exists`,
 };
 
 const aliases: Record<string, string> = { enable: "on", disable: "off" };
@@ -304,6 +326,73 @@ const playSession = async (b: Binrec, args: string[]) => {
   }
 };
 
+const exportSession = async (b: Binrec, args: string[]) => {
+  let output: string | undefined;
+  let format: VideoFormat | undefined;
+  let speed: number | undefined;
+  let fps: number | undefined;
+  let maxPause: number | undefined;
+  let overwrite = false;
+  let id: string | undefined;
+  const numberOf = (flag: string, value: string | undefined) => {
+    const number = Number(value);
+    if (value === undefined || value === "" || !Number.isFinite(number)) {
+      throw new Error(`binrec: ${flag} must be a number`);
+    }
+    return number;
+  };
+  try {
+    while (args.length) {
+      const [arg, value] = args;
+      args = args.slice(1);
+      if (arg === "--force" || arg === "-f") {
+        overwrite = true;
+        continue;
+      }
+      if (!arg!.startsWith("-") || arg === "-") {
+        if (id) throw new Error(`binrec: export takes one session id, got ${id} and ${arg}`);
+        id = arg;
+        continue;
+      }
+      args = args.slice(1);
+      if (arg === "--output" || arg === "-o") {
+        if (!value) throw new Error("binrec: --output needs a file");
+        output = value;
+      } else if (arg === "--format") {
+        if (!videoFormats.includes(value as VideoFormat)) {
+          throw new Error(`binrec: --format must be one of ${videoFormats.join(", ")}`);
+        }
+        format = value as VideoFormat;
+      } else if (arg === "--speed") {
+        speed = numberOf(arg, value);
+        if (speed <= 0) throw new Error("binrec: --speed must be a number above 0");
+      } else if (arg === "--fps") {
+        fps = numberOf(arg, value);
+        if (fps <= 0 || fps > 120) throw new Error("binrec: --fps must be a number above 0, up to 120");
+      } else if (arg === "--max-pause") {
+        maxPause = numberOf(arg, value);
+        if (maxPause < 0) maxPause = Infinity;
+      } else {
+        throw new Error(`binrec: unknown option ${arg} for export\n\n${commandHelp.export!(b)}`);
+      }
+    }
+    if (!id) {
+      console.error(commandHelp.export!(b));
+      return 1;
+    }
+    format ??= (output && formatOf(output)) || "mp4";
+    output ??= `binrec-${id.slice(0, 8)}.${format}`;
+    const result = await b.exportVideo(id, output, { format, speed, fps, maxPause, overwrite });
+    console.log(
+      `Exported ${result.output}: ${result.format}, ${result.width}×${result.height}, ${result.duration.toFixed(1)} s`,
+    );
+    return 0;
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    return 1;
+  }
+};
+
 /** Runs the binrec CLI with `argv` (without the runtime and script) and exits the process. */
 export const runCli = async (argv: string[]) => {
   const b = binrec.create();
@@ -349,6 +438,8 @@ export const runCli = async (argv: string[]) => {
       process.exit(await printList(b, rest[0]));
     case "play":
       process.exit(await playSession(b, rest));
+    case "export":
+      process.exit(await exportSession(b, rest));
     case "rec": {
       let records = b.records;
       let config: string | undefined = b.config;

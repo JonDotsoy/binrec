@@ -1,6 +1,6 @@
 import { runCli } from "./src/cli.ts";
 
-export { binrec, rec, play, playTree, playUi, asTrees, sessionTree, defaultPath } from "./src/binrec.ts";
+export { binrec, rec, play, playTree, playUi, exportVideo, asTrees, sessionTree, defaultPath } from "./src/binrec.ts";
 export type {
   Binrec,
   PlayOptions,
@@ -8,6 +8,9 @@ export type {
   PlayUiServer,
   PlayUiSource,
   CommandStats,
+  ExportOptions,
+  ExportResult,
+  VideoFormat,
   CreateOptions,
   RecOptions,
   RecResult,

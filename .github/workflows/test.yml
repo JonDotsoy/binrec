@@ -25,4 +25,7 @@ jobs:
       # test/ui-browser.test.ts drives the play --ui page in headless Chromium.
       - run: bunx playwright-core install --with-deps --only-shell chromium
 
+      # test/export.test.ts encodes and reads back videos with ffmpeg.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       - run: bun test --ci
