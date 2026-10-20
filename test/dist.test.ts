@@ -19,7 +19,7 @@ afterAll(async () => {
   await rm(binrecHome, { recursive: true, force: true });
 });
 
-test("build writes dist/binrec.js, dist/binrec.d.ts, dist/package.json, README.md, LICENSE and SECURITY.md", async () => {
+test("build writes dist/binrec.js, dist/binrec.d.ts, dist/package.json, README.md, LICENSE, SECURITY.md and FONT-LICENSE.txt", async () => {
   const pkg = await Bun.file(join(dist, "package.json")).json();
   expect(pkg).toMatchObject({
     name: "@jondotsoy/binrec",
@@ -39,6 +39,7 @@ test("build writes dist/binrec.js, dist/binrec.d.ts, dist/package.json, README.m
   for (const file of ["README.md", "LICENSE", "SECURITY.md"]) {
     expect(await Bun.file(join(dist, file)).text()).toBe(await Bun.file(join(root, file)).text());
   }
+  expect(await Bun.file(join(dist, "FONT-LICENSE.txt")).text()).toContain("SIL OPEN FONT LICENSE Version 1.1");
 });
 
 test("dist/binrec.js works as the binrec bin", async () => {
@@ -74,6 +75,16 @@ test("dist/binrec.js play --ui serves the player with xterm.js from the bundle",
   } finally {
     await server.stop();
   }
+});
+
+test.skipIf(!Bun.which("ffmpeg"))("dist/binrec.js export draws a video with the font in the bundle", async () => {
+  const { binrec } = await import(cli);
+  const b = binrec.create({ path: join(binrecHome, "bin") });
+  const last = await b.lastSession("date");
+  const output = join(binrecHome, "date.gif");
+  const result = await b.exportVideo(last.sessionId, output);
+  expect(result).toMatchObject({ output, format: "gif", width: 820, height: 524 });
+  expect((await Bun.file(output).bytes()).subarray(0, 6)).toEqual(new TextEncoder().encode("GIF89a"));
 });
 
 test("dist/binrec.js --version prints the built version", async () => {

@@ -33,6 +33,8 @@ await Bun.write(join(outdir, "binrec.d.ts"), await buildDeclarations());
 for (const file of ["README.md", "LICENSE", "SECURITY.md"]) {
   await Bun.write(join(outdir, file), Bun.file(join(root, file)));
 }
+// The font binrec export draws videos with is bundled, so its license ships too.
+await Bun.write(join(outdir, "FONT-LICENSE.txt"), Bun.file(join(root, "src", "video", "FONT-LICENSE.txt")));
 
 await Bun.write(
   join(outdir, "package.json"),
@@ -60,7 +62,7 @@ await Bun.write(
   )}\n`,
 );
 
-console.log(`Built ${join("dist", "binrec.js")}, binrec.d.ts, package.json, README.md, LICENSE and SECURITY.md`);
+console.log(`Built ${join("dist", "binrec.js")}, binrec.d.ts, package.json, README.md, LICENSE, SECURITY.md and FONT-LICENSE.txt`);
 
 /**
  * Emits declarations for index.ts with tsc and joins the modules it reaches

@@ -50,6 +50,9 @@ jobs:
           bun pm version "${{ inputs.bump }}" --no-git-tag-version
           echo "version=$(bun -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
 
+      # test/export.test.ts encodes and reads back videos with ffmpeg.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       - run: bun test --ci
 
       - run: bun run build

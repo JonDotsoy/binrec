@@ -66,6 +66,7 @@ binrec rec --records ./records /usr/bin/date +%F
 | `binrec list [<bin>]` | Lists the recorded sessions, oldest first, with their id, start time, exit code, size and command line. A session run inside another one (a command run from a recorded shell, or by a recorded tool) comes right after it, indented with `└─`. With `<bin>`, only the sessions of that binary. |
 | `binrec play [--timestamps] [--no-wait \| --speed <n>] [--tree] <id>` | Plays session `<id>` back: writes its `stdout` and `stderr` again, each chunk as long after the start as it was recorded. The start of an id is enough when it matches only one session. `--timestamps` (`-t`) shows every line with its recorded timestamp, the time since the start and its stream. `--no-wait` (`-n`) writes the whole output at once, to see how the session ended. `--speed 2` plays twice as fast, `--speed 0.5` half as fast, and `--speed 0` is the same as `--no-wait`. `--tree` (`-T`) plays the sessions that ran inside it too; see [Nested sessions](#nested-sessions). |
 | `binrec play --ui [--port <n>] [--speed <n>] [<id>]` | Plays session `<id>` in the browser instead, or opens a panel with every recorded session when `<id>` is left out: serves a page on `127.0.0.1` (on a free port, or `--port`), prints its address and runs until Ctrl+C. See [Play in the browser](#play-in-the-browser). |
+| `binrec export [-o <file>] [--format mp4\|webm\|gif] [--speed <n>] [--fps <n>] [--max-pause <s>] [--force] <id>` | Turns session `<id>` into a video: MP4 (H.264), WebM (VP9) or GIF, by the extension of `-o` (`--output`) or `--format`; without `-o` it writes `binrec-<id>.mp4` in the current folder. Needs [ffmpeg](https://ffmpeg.org). See [Export a video](#export-a-video). |
 | `binrec rec [--records <dir>] [--config <file>] <path> [args…]` | Runs `<path>`, passes stdio through, records the session and exits with its exit code. |
 | `binrec --version` (`-v`) | Prints the binrec version. |
 | `binrec --help` (`-h`) | Prints every command. `binrec <command> --help` (or `-h`) prints the help of one command without running it. For `rec`, only a lone `binrec rec --help` does; with more arguments, `--help` goes to the recorded program. |
@@ -169,6 +170,24 @@ When the session ran other recorded programs, or ran inside one (see [Nested ses
 
 The page only listens on `127.0.0.1` and only answers requests addressed to `127.0.0.1` or `localhost`, so other machines and other websites cannot read the session. Everything it needs, xterm.js included, is served by binrec itself, so it works offline.
 
+### Export a video
+
+`binrec export <id>` turns a session into a video you can share or put in a README, drawn like the terminal of `binrec play --ui`:
+
+```console
+$ binrec export -o demo.gif 81225734
+Exported demo.gif: gif, 740×356, 6.9 s
+```
+
+![A recorded session exported with binrec export](docs/export.gif)
+
+- The format comes from the extension of `-o`: `.mp4` (H.264, plays everywhere), `.webm` (VP9) or `.gif` (one palette, no dithering, loops). `--format` picks it when the name has another extension. Without `-o` the video is `binrec-<id>.mp4` in the current folder. An existing file is not replaced unless you pass `--force` (`-f`).
+- The output is played into [xterm.js](https://xtermjs.org) (the same terminal as `play --ui`, without a browser) at the recorded size, following resizes, so colors, cursor moves and full-screen programs come out as they looked. Text is drawn with JetBrains Mono, which binrec carries inside, so no font has to be installed.
+- `--speed 2` makes the video twice as fast. Waits longer than 5 seconds (like a shell waiting for you to type) are cut to 5; `--max-pause <s>` changes the limit and a negative one keeps every wait. The last frame stays on screen for one more second.
+- `--fps` sets the frames per second: 30 by default, 15 for a GIF.
+- binrec draws the frames and [ffmpeg](https://ffmpeg.org) encodes them, so ffmpeg must be in your `PATH` (`sudo apt install ffmpeg`, `brew install ffmpeg`, `winget install ffmpeg`). Without it, `binrec export` stops and says so.
+- Characters the font does not have, like CJK or emoji, show as an empty box.
+
 ### Nested sessions
 
 A recorded program that runs other recorded programs, like a recorded `bash` where you run `date`, or a tool that calls `git` underneath, records each of them as its own session. binrec passes `BINREC_SESSION` to the program it records, so every session started inside saves its parent's id, and the `depth` it ran at, on its first line. `binrec list` shows them under their parent, and `binrec play --tree` plays the whole tree, interleaved by time, with every line labeled by the session that wrote it:
@@ -236,6 +255,7 @@ session?.lines;    // every ndjson line of the session
 | `b.sessionTree(id, { fromRoot? })` | Session `id` followed by every session that ran inside it, as `{ session, depth }`; with `fromRoot`, starting from the outermost session `id` ran inside. Empty when there is no such session. |
 | `b.play(id, { speed?, timestamps?, tree?, stdout?, stderr? })` | Writes the `stdout` and `stderr` of session `id` again with the recorded timing, like `binrec play`; `tree` plays it like `--tree`. Throws if there is no such session. |
 | `b.playUi(id?, { port?, speed? })` | Serves the page of `binrec play --ui`, opening on session `id` or, without it, on the panel, and returns `{ url, stop() }`. Throws if there is no such session. |
+| `b.exportVideo(id, output, { format?, speed?, fps?, maxPause?, overwrite?, ffmpeg? })` | Writes session `id` as a video at `output`, like `binrec export`, and returns `{ output, format, width, height, frames, duration }`. `maxPause` is in seconds (`Infinity` keeps every wait), `ffmpeg` is its path (default: the one in `PATH`). Throws if there is no such session, if `output` exists and `overwrite` is not set, or if ffmpeg is missing or fails. |
 | `b.lastSession(command)` | The most recent session of `command`, or `null`. |
 | `b.stats()` | `{ sessions, total, commands }` from the sessions' stats files: the number of sessions, the bytes they consumed, and one `{ command, sessions, total }` per binary, the one that consumed the most first. A record without a stats file is read instead; records without `size` or `total` (older or unfinished ones) are counted from their data. |
 | `b.disableRecords()` / `b.enableRecords()` | Turns recording off or on in `config.json`, for every shim installed by this instance. Shims keep working while recording is off. |
@@ -245,6 +265,7 @@ session?.lines;    // every ndjson line of the session
 | `binrec.rec(path, args, { records })` | Runs and records one command, like `binrec rec`. Pass `records: false` to run without recording. |
 | `play(session, { speed?, timestamps?, stdout?, stderr? })` | Plays a `Session` you already read back to `stdout` and `stderr` (default `process.stdout` and `process.stderr`). |
 | `playTree(tree, { speed?, timestamps?, stdout?, stderr? })` | Plays a tree from `b.sessionTree(id)` like `binrec play --tree`. |
+| `exportVideo(session, output, options?)` | Writes a `Session` you already read as a video, with the options of `b.exportVideo`. |
 | `playUi(source, { port?, speed?, selected? })` | Serves the `binrec play --ui` page for a `Session` or a tree you already read, or for a `{ sessions(), tree(id) }` source read on every request, and returns `{ url, stop() }`. |
 
 Each session has `sessionId`, `command`, `args`, `parent` (`null` if it was not run inside a recorded session), `depth`, `timestamp`, `exitCode` (`null` if it has not ended), `total` (bytes consumed), `recordPath` and `lines`.
@@ -260,12 +281,12 @@ Each session has `sessionId`, `command`, `args`, `parent` (`null` if it was not 
 ```sh
 bun install
 bunx playwright-core install --only-shell chromium  # once: the browser tests of play --ui
-bun test           # tests use Bun.$ and snapshots; the date cases need GNU date
+bun test           # tests use Bun.$ and snapshots; the date cases need GNU date, the export ones ffmpeg
 bun run typecheck  # tsc --noEmit over the sources and tests
 bun run build      # writes dist/binrec.js, dist/binrec.d.ts and dist/package.json
 ```
 
-`dist/binrec.js` is both the library and the `binrec` bin; `dist/binrec.d.ts` holds its types. Only `dist/` is published; the root `package.json` is private.
+`dist/binrec.js` is both the library and the `binrec` bin; `dist/binrec.d.ts` holds its types. The glyphs `binrec export` draws with live in `src/video/font.txt`, made by `bun scripts/font-atlas.ts` from JetBrains Mono (its license, `src/video/FONT-LICENSE.txt`, ships in `dist/`). Only `dist/` is published; the root `package.json` is private.
 
 Releases run from the **publish** GitHub Actions workflow (`workflow_dispatch`, with a `patch`, `minor` or `major` bump). It runs the tests, builds, publishes `dist/` to npm with trusted publishing (OIDC), tags the version and creates a GitHub release.
 
@@ -276,3 +297,5 @@ Records can contain secrets. See [SECURITY.md](SECURITY.md) for how records are 
 ## License
 
 [MIT](LICENSE) © [Jonathan Delgado](https://jon.soy) <hi@jon.soy>
+
+The glyphs `binrec export` draws videos with come from [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono), under the [SIL Open Font License 1.1](src/video/FONT-LICENSE.txt).
