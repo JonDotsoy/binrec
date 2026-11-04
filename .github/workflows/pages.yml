@@ -5,7 +5,7 @@ on:
     branches:
       - develop
     paths:
-      - docs/**
+      - apps/landing/**
       - .github/workflows/pages.yml
   workflow_dispatch:
 
@@ -29,10 +29,13 @@ jobs:
 
       - uses: actions/configure-pages@v5
 
-      # docs/ holds the landing page (index.html) and the images it uses.
+      # apps/landing/ holds the landing page (index.html) and the images it uses.
+      # package.json only gives it a local dev server, it is not part of the site.
+      - run: rm apps/landing/package.json
+
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: docs
+          path: apps/landing
 
       - id: deployment
         uses: actions/deploy-pages@v4
