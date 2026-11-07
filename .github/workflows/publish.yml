@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Playwright 1.56.1 has no browsers for ubuntu 26.04 (ubuntu-latest)
     steps:
       - uses: actions/checkout@v5
 
@@ -43,25 +43,33 @@ jobs:
 
       # test/ui-browser.test.ts drives the play --ui page in headless Chromium.
       - run: bunx playwright-core install --with-deps --only-shell chromium
+        working-directory: packages/binrec
 
       - name: Bump version
         id: version
+        working-directory: packages/binrec
         run: |
           bun pm version "${{ inputs.bump }}" --no-git-tag-version
           echo "version=$(bun -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
+          # bun.lock at the top of the monorepo records the version of each workspace.
+          bun install --lockfile-only
 
       # test/export.test.ts encodes and reads back videos with ffmpeg.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
       - run: bun test --ci
+        working-directory: packages/binrec
 
       - run: bun run build
+        working-directory: packages/binrec
 
       - name: Pack dist
         id: pack
+        working-directory: packages/binrec
         run: echo "tarball=$RUNNER_TEMP/$(npm pack dist/ --silent --pack-destination "$RUNNER_TEMP")" >> "$GITHUB_OUTPUT"
 
       - name: Publish dist to npm
+        working-directory: packages/binrec
         run: npm publish dist/
 
       - name: Commit and tag the new version
@@ -73,6 +81,7 @@ jobs:
           git push origin HEAD "v${{ steps.version.outputs.version }}"
 
       - name: Create GitHub release
+        working-directory: packages/binrec
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}

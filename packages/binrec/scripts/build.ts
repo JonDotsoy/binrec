@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
+// README.md, LICENSE and SECURITY.md live at the top of the monorepo.
+const repoRoot = resolve(root, "../..");
 const outdir = join(root, "dist");
 
 const pkg = await Bun.file(join(root, "package.json")).json();
@@ -31,7 +33,7 @@ await Bun.write(join(outdir, "binrec.d.ts"), await buildDeclarations());
 
 // npm shows the README of the published folder on the package page.
 for (const file of ["README.md", "LICENSE", "SECURITY.md"]) {
-  await Bun.write(join(outdir, file), Bun.file(join(root, file)));
+  await Bun.write(join(outdir, file), Bun.file(join(repoRoot, file)));
 }
 // The font binrec export draws videos with is bundled, so its license ships too.
 await Bun.write(join(outdir, "FONT-LICENSE.txt"), Bun.file(join(root, "src", "video", "FONT-LICENSE.txt")));

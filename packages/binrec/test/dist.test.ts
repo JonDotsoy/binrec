@@ -37,7 +37,7 @@ test("build writes dist/binrec.js, dist/binrec.d.ts, dist/package.json, README.m
   expect(await Bun.file(join(dist, "binrec.d.ts")).exists()).toBe(true);
   expect((await Bun.file(cli).text()).startsWith("#!/usr/bin/env bun\n")).toBe(true);
   for (const file of ["README.md", "LICENSE", "SECURITY.md"]) {
-    expect(await Bun.file(join(dist, file)).text()).toBe(await Bun.file(join(root, file)).text());
+    expect(await Bun.file(join(dist, file)).text()).toBe(await Bun.file(join(root, "../..", file)).text());
   }
   expect(await Bun.file(join(dist, "FONT-LICENSE.txt")).text()).toContain("SIL OPEN FONT LICENSE Version 1.1");
 });

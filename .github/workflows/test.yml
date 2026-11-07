@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Playwright 1.56.1 has no browsers for ubuntu 26.04 (ubuntu-latest)
     steps:
       - uses: actions/checkout@v5
 
@@ -20,12 +20,15 @@ jobs:
         with:
           bun-version: 1.4.2
 
+      # Installs every workspace of the monorepo from the bun.lock at the top.
       - run: bun install --frozen-lockfile
 
       # test/ui-browser.test.ts drives the play --ui page in headless Chromium.
       - run: bunx playwright-core install --with-deps --only-shell chromium
+        working-directory: packages/binrec
 
       # test/export.test.ts encodes and reads back videos with ffmpeg.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
       - run: bun test --ci
+        working-directory: packages/binrec

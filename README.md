@@ -1,4 +1,4 @@
-<img src="docs/logo.svg" alt="binrec logo" align="right" width="200">
+<img src="apps/landing/logo.svg" alt="binrec logo" align="right" width="200">
 
 # binrec
 
@@ -115,11 +115,11 @@ e531b87f-3f0c-4b7e-9a51-2c8d0f6a4e21  2026-10-18T16:31:43Z     0  50 B  /usr/bin
 
 `binrec play <id>` writes the session's `stdout` and `stderr` again with the recorded timing, so it looks just like the original run (stderr in red here):
 
-![binrec play replaying a session with its recorded timing](docs/play.svg)
+![binrec play replaying a session with its recorded timing](apps/landing/play.svg)
 
 `--timestamps` (`-t`) shows when each line was written: its recorded timestamp, the time since the session started and its stream, with the command line first and the exit code last:
 
-![binrec play -t showing the timestamp, elapsed time and stream of every line](docs/play-timestamps.svg)
+![binrec play -t showing the timestamp, elapsed time and stream of every line](apps/landing/play-timestamps.svg)
 
 ```console
 $ binrec play -t e531b87f
@@ -141,7 +141,7 @@ binrec play -t -n e531b87f        # every line with its timestamp, without waiti
 
 `play` keeps each stream on its own: `binrec play <id> 2>/dev/null` shows only what went to `stdout`. It does not write the `stdin` chunks back: on a terminal, what you typed is already in `stdout` as the terminal's echo.
 
-The animations above are made from a real record with `bun scripts/demo-svg.ts <record.ndjson> docs/play.svg [--timestamps]`.
+The animations above are made from a real record with `bun packages/binrec/scripts/demo-svg.ts <record.ndjson> apps/landing/play.svg [--timestamps]`.
 
 ### Play in the browser
 
@@ -153,20 +153,20 @@ Playing 81225734 at http://127.0.0.1:41437/
 Open it in your browser. Press Ctrl+C to stop.
 ```
 
-![binrec play --ui playing a recorded session](docs/play-ui.png)
+![binrec play --ui playing a recorded session](apps/landing/play-ui.png)
 
 - The terminal is [xterm.js](https://xtermjs.org), so colors, cursor moves and full-screen programs (`top`, `vim`, progress bars) look as they did. It starts at the size of the terminal the session was recorded on, and follows its resizes.
 - The timeline under it runs from the start of the session to its end. Every output is a tick (taller for more bytes, red for `stderr`), and bursts of output are shaded, so you can see when the screen changed.
 - Click or drag the timeline to jump to any moment, forward or back. ⏮ and ⏭ (or `,` and `.`) jump to the previous or next change; Space plays and pauses; ← and → move 1 second (10 with Shift); Home and End go to the start and the end.
 - Speed goes from 0.25× to 16× (`--speed` sets where it starts), and **Skip pauses** cuts long waits short.
 
-![Scrubbing the timeline of binrec play --ui](docs/play-ui.gif)
+![Scrubbing the timeline of binrec play --ui](apps/landing/play-ui.gif)
 
 Without an id, `binrec play --ui` opens with a panel of every recorded session (☰ shows and hides it, and a box filters it); pick one to play it. The panel stays available to jump to another session, and sessions recorded while the page is open show up when you reload it.
 
 When the session ran other recorded programs, or ran inside one (see [Nested sessions](#nested-sessions)), the page loads the whole run, from its outermost session: every process gets a bar from when it started to when it ended, on the same time axis as the timeline and indented under the process it ran inside. Click a process, or pick it in the selector next to the logo, to show its output in the terminal; the page starts on the session you passed.
 
-![binrec play --ui with the panel of sessions and the processes of a recorded bash](docs/play-ui-tree.png)
+![binrec play --ui with the panel of sessions and the processes of a recorded bash](apps/landing/play-ui-tree.png)
 
 The page only listens on `127.0.0.1` and only answers requests addressed to `127.0.0.1` or `localhost`, so other machines and other websites cannot read the session. Everything it needs, xterm.js included, is served by binrec itself, so it works offline.
 
@@ -179,7 +179,7 @@ $ binrec export -o demo.gif 81225734
 Exported demo.gif: gif, 740×356, 6.9 s
 ```
 
-![A recorded session exported with binrec export](docs/export.gif)
+![A recorded session exported with binrec export](apps/landing/export.gif)
 
 - The format comes from the extension of `-o`: `.mp4` (H.264, plays everywhere), `.webm` (VP9) or `.gif` (one palette, no dithering, loops). `--format` picks it when the name has another extension. Without `-o` the video is `binrec-<id>.mp4` in the current folder. An existing file is not replaced unless you pass `--force` (`-f`).
 - The output is played into [xterm.js](https://xtermjs.org) (the same terminal as `play --ui`, without a browser) at the recorded size, following resizes, so colors, cursor moves and full-screen programs come out as they looked. Text is drawn with JetBrains Mono, which binrec carries inside, so no font has to be installed.
@@ -278,15 +278,25 @@ Each session has `sessionId`, `command`, `args`, `parent` (`null` if it was not 
 
 ## Development
 
+The repository is a Bun workspaces monorepo:
+
+| Folder | What it holds |
+| --- | --- |
+| [`packages/binrec/`](packages/binrec) | the `@jondotsoy/binrec` package: the CLI, the library, its tests and build scripts |
+| [`apps/landing/`](apps/landing) | the landing page published on GitHub Pages, and the images this README uses |
+
 ```sh
-bun install
+bun install        # from the top of the repository, installs every workspace
+cd packages/binrec
 bunx playwright-core install --only-shell chromium  # once: the browser tests of play --ui
 bun test           # tests use Bun.$ and snapshots; the date cases need GNU date, the export ones ffmpeg
 bun run typecheck  # tsc --noEmit over the sources and tests
 bun run build      # writes dist/binrec.js, dist/binrec.d.ts and dist/package.json
 ```
 
-`dist/binrec.js` is both the library and the `binrec` bin; `dist/binrec.d.ts` holds its types. The glyphs `binrec export` draws with live in `src/video/font.txt`, made by `bun scripts/font-atlas.ts` from JetBrains Mono (its license, `src/video/FONT-LICENSE.txt`, ships in `dist/`). Only `dist/` is published; the root `package.json` is private.
+`bun run test`, `bun run typecheck` and `bun run build` also work from the top of the repository, and `bun run landing` serves the landing page locally.
+
+`dist/binrec.js` is both the library and the `binrec` bin; `dist/binrec.d.ts` holds its types. The glyphs `binrec export` draws with live in `packages/binrec/src/video/font.txt`, made by `bun scripts/font-atlas.ts` from JetBrains Mono (its license, `packages/binrec/src/video/FONT-LICENSE.txt`, ships in `dist/`). Only `packages/binrec/dist/` is published; every `package.json` in the repository is private.
 
 Releases run from the **publish** GitHub Actions workflow (`workflow_dispatch`, with a `patch`, `minor` or `major` bump). It runs the tests, builds, publishes `dist/` to npm with trusted publishing (OIDC), tags the version and creates a GitHub release.
 
@@ -298,4 +308,4 @@ Records can contain secrets. See [SECURITY.md](SECURITY.md) for how records are 
 
 [MIT](LICENSE) © [Jonathan Delgado](https://jon.soy) <hi@jon.soy>
 
-The glyphs `binrec export` draws videos with come from [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono), under the [SIL Open Font License 1.1](src/video/FONT-LICENSE.txt).
+The glyphs `binrec export` draws videos with come from [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono), under the [SIL Open Font License 1.1](packages/binrec/src/video/FONT-LICENSE.txt).
